@@ -1,7 +1,7 @@
 {
     "id": "osmium-reservations",
     "name": "Osmium Reservations",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Table reservation requests the restaurant confirms or declines: tables with seats, party size, opening hours with a break between lunch and dinner, a hidden dining time, emails and calendar links, with hooks so a calendar service can follow along",
     "category": "business",
     "author": {

@@ -442,12 +442,20 @@ class ReservationsController extends AdminController
             'customerName' => (string) $row['customer_name'],
             'customerEmail' => (string) $row['customer_email'],
             'customerPhone' => (string) ($row['customer_phone'] ?? ''),
-            'endTime' => (new \DateTimeImmutable($row['ends_at']))->format('H:i'),
+            'endTime' => $this->endTime(start: $start, endsAt: $row['ends_at']),
             'date' => $start->format('Y-m-d'),
             'time' => $start->format('H:i'),
             'customerNotes' => $row['customer_notes'] ?? '',
             'adminNotes' => $row['admin_notes'] ?? '',
         ];
+    }
+
+    /** The time of day the table is free again; a meal running past midnight is drawn to the end of its day (24:00) */
+    private function endTime(\DateTimeImmutable $start, string $endsAt): string
+    {
+        $end = new \DateTimeImmutable($endsAt);
+
+        return $end->format('Y-m-d') === $start->format('Y-m-d') ? $end->format('H:i') : '24:00';
     }
 
     private function formatDeleted(array $row): array
