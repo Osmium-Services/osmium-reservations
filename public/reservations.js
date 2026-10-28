@@ -181,6 +181,7 @@
             action: 'save_settings',
             step_minutes: byId('settingsStep').value,
             dining_minutes: byId('settingsDining').value,
+            turnaround_minutes: byId('settingsTurnaround').value,
             min_party: byId('settingsMinParty').value,
             max_party: byId('settingsMaxParty').value,
             min_notice_hours: byId('settingsNotice').value,
@@ -273,8 +274,129 @@
         });
     }
 
+    // ---- Dragging a booking to another table ----
+
+    const DRAG_THRESHOLD = 6;
+    let justDragged = false;
+
+    // Why this booking cannot sit at that table, or '' when it can: switched off, too few seats, or a confirmed booking in the way
+    function whyNot(item, tableId) {
+        const table = config.tables[tableId];
+        if (!table || !table.enabled) return 'That table is switched off';
+        if (Number(table.seats) < Number(item.partySize)) return table.name + ' seats ' + table.seats + ', too small for ' + item.partySize;
+
+        const turnaround = config.schedule.turnaround || 0;
+        const start = toMinutes(item.time);
+        const end = toMinutes(item.endTime);
+        const clash = Object.values(config.reservations).filter(function (other) {
+            return other.id !== item.id && other.status === 'confirmed' && other.date === item.date && String(other.tableId) === String(tableId)
+                && toMinutes(other.time) < end + turnaround && toMinutes(other.endTime) + turnaround > start;
+        })[0];
+
+        return clash ? table.name + ' is taken by ' + clash.customerName + ' at ' + clash.time : '';
+    }
+
+    // Lights up the tables the booking could go to and greys the rest; a waiting request may also go back to "No table yet"
+    function markLanes(lanes, item) {
+        lanes.forEach(function (lane) {
+            const isCurrent = lane.dataset.table === String(item.tableId);
+            const noTable = lane.dataset.table === '';
+            const reason = noTable ? (item.status === 'requested' ? '' : 'A confirmed booking needs a table') : whyNot(item, lane.dataset.table);
+            lane.dataset.reason = reason;
+            lane.classList.toggle('sched-yes', reason === '' && !isCurrent);
+            lane.classList.toggle('sched-no', reason !== '' && !isCurrent);
+        });
+    }
+
+    function clearLanes(lanes) {
+        lanes.forEach(function (lane) { lane.classList.remove('sched-yes', 'sched-no', 'sched-over'); });
+    }
+
+    function laneAt(lanes, x) {
+        return lanes.filter(function (lane) {
+            const box = lane.getBoundingClientRect();
+
+            return x >= box.left && x < box.right;
+        })[0] || null;
+    }
+
+    // blockedReason is why the lane was greyed while dragging ('' when it was fine); the lane's own shading is gone by now
+    async function dropOnTable(item, lane, blockedReason) {
+        clear('scheduleMessage');
+        const sameTable = lane === null || lane.dataset.table === String(item.tableId);
+        if (sameTable) return;
+        if (blockedReason !== '') {
+            show('scheduleMessage', 'warning', blockedReason);
+            return;
+        }
+
+        try {
+            const result = await post({
+                action: 'reschedule', id: item.id, party_size: item.partySize, table_id: lane.dataset.table || 0,
+                date: item.date, time: item.time, admin_notes: item.adminNotes
+            });
+            if (result.success) {
+                window.location.reload();
+                return;
+            }
+
+            show('scheduleMessage', 'warning', result.error || 'That did not work');
+        } catch (error) {
+            show('scheduleMessage', 'danger', 'An error occurred');
+        }
+    }
+
+    // A press that moves further than a few pixels is a drag; one that does not is a click and opens the booking
+    function makeDraggable(block, item) {
+        block.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0) return;
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const lanes = Array.from(document.querySelectorAll('.sched-col'));
+            let dragging = false;
+            let target = null;
+
+            const move = function (ev) {
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+                if (!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+
+                if (!dragging) {
+                    dragging = true;
+                    block.classList.add('sched-dragging');
+                    markLanes(lanes, item);
+                }
+                block.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+                target = laneAt(lanes, ev.clientX);
+                lanes.forEach(function (lane) { lane.classList.toggle('sched-over', lane === target && lane.classList.contains('sched-yes')); });
+            };
+            const finish = function () {
+                block.removeEventListener('pointermove', move);
+                block.removeEventListener('pointerup', finish);
+                block.removeEventListener('pointercancel', finish);
+                block.style.transform = '';
+                block.classList.remove('sched-dragging');
+                if (!dragging) return;
+
+                justDragged = true;
+                window.setTimeout(function () { justDragged = false; }, 100);
+                const lane = target;
+                const blockedReason = lane !== null && lane.classList.contains('sched-no') ? lane.dataset.reason : '';
+                clearLanes(lanes);
+                dropOnTable(item, lane, blockedReason);
+            };
+
+            block.setPointerCapture(e.pointerId);
+            block.addEventListener('pointermove', move);
+            block.addEventListener('pointerup', finish);
+            block.addEventListener('pointercancel', finish);
+        });
+    }
+
     function renderSchedule(dateText) {
         const grid = byId('scheduleGrid');
+        clear('scheduleMessage');
         const date = new Date(dateText + 'T00:00:00');
         byId('scheduleTitle').textContent = date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(',', '');
         grid.textContent = '';
@@ -316,6 +438,7 @@
 
         columns.forEach(function (column) {
             const lane = el('div', 'sched-col', { height: height + 'px' });
+            lane.dataset.table = column.table === null ? '' : column.table;
             for (let at = origin; at < end; at += 60) {
                 lane.appendChild(el('div', 'sched-line', { top: (at - origin) * PX_PER_MINUTE + 'px' }));
             }
@@ -337,8 +460,15 @@
                 block.title = item.time + ' to ' + item.endTime + ' ' + item.customerName + ', ' + item.partySize + ' (' + item.status + ')';
                 block.appendChild(document.createTextNode(item.time + ' ' + item.customerName));
                 block.appendChild(el('small')).textContent = 'Party of ' + item.partySize;
-                block.addEventListener('click', function () { openReservation(item); });
+                block.addEventListener('click', function () { if (!justDragged) openReservation(item); });
+                makeDraggable(block, item);
                 lane.appendChild(block);
+                if (config.schedule.turnaround > 0) {
+                    lane.appendChild(el('div', 'sched-shade sched-turn', {
+                        top: (toMinutes(item.endTime) - origin) * PX_PER_MINUTE + 'px',
+                        height: config.schedule.turnaround * PX_PER_MINUTE + 'px'
+                    })).title = 'Turnaround: held to reset the table';
+                }
             });
 
             table.appendChild(lane);

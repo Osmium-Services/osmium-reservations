@@ -127,6 +127,22 @@ class ReservationsDbTest extends DatabaseTestCase
         $this->assertSame($first, (int) $clash['id']);
     }
 
+    public function test_the_turnaround_holds_a_table_after_a_booking_and_before_the_next(): void
+    {
+        $reservations = new Reservation($this->db);
+        $table = $this->table('zzTurn', 4);
+        $this->confirmed($reservations, 4, $table, '2026-11-05 19:00:00', '2026-11-05 20:30:00');
+
+        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 20:30:00', '2026-11-05 22:00:00'), 'No turnaround: free the moment it ends');
+        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 20:30:00', '2026-11-05 22:00:00', 0, 5), 'Still being reset');
+        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 20:34:00', '2026-11-05 22:04:00', 0, 5));
+        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 20:35:00', '2026-11-05 22:05:00', 0, 5), 'Exactly the turnaround later');
+        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 17:30:00', '2026-11-05 19:00:00', 0, 5), 'Leaves no time to reset before the next booking');
+        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 17:25:00', '2026-11-05 18:55:00', 0, 5));
+        $this->assertNotNull($reservations->findOverlap(excludeId: 0, tableId: $table, startsAt: '2026-11-05 20:30:00', endsAt: '2026-11-05 22:00:00', turnaroundMinutes: 5));
+        $this->assertNull($reservations->findOverlap(excludeId: 0, tableId: $table, startsAt: '2026-11-05 20:35:00', endsAt: '2026-11-05 22:05:00', turnaroundMinutes: 5));
+    }
+
     public function test_the_biggest_table_sets_the_largest_party(): void
     {
         $this->table('zzA', 2);

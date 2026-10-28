@@ -68,6 +68,11 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
                     <div class="form-text">How long a table is held for each booking. Customers never see it.</div>
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label" for="settingsTurnaround">Turnaround (minutes)</label>
+                    <input type="number" class="form-control" id="settingsTurnaround" min="0" max="60" value="<?= (int) $settings['turnaroundMinutes'] ?>">
+                    <div class="form-text">Held after each booking to reset the table. Customers never see it.</div>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label" for="settingsMinParty">Smallest party</label>
                     <input type="number" class="form-control" id="settingsMinParty" min="1" max="100" value="<?= (int) $settings['minParty'] ?>">
                 </div>

@@ -128,29 +128,48 @@ class Reservation extends Model
      *
      * @return array<string, mixed>|null
      */
-    public function findFreeTable(int $partySize, string $startsAt, string $endsAt, int $excludeId = 0): ?array
+    public function findFreeTable(int $partySize, string $startsAt, string $endsAt, int $excludeId = 0, int $turnaroundMinutes = 0): ?array
     {
+        $held = $this->held(startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: $turnaroundMinutes);
         $this->database->query($this->loadSqlFile('reservation-free-table.sql'));
         $this->database->bind(param: ':party_size', value: $partySize);
         $this->database->bind(param: ':id', value: $excludeId);
-        $this->database->bind(param: ':starts_at', value: $startsAt);
-        $this->database->bind(param: ':ends_at', value: $endsAt);
+        $this->database->bind(param: ':starts_at', value: $held['startsAt']);
+        $this->database->bind(param: ':ends_at', value: $held['endsAt']);
         $result = $this->database->single();
 
         return $result ?: null;
     }
 
     /** The earliest confirmed reservation on this table that overlaps the time, other than the reservation itself */
-    public function findOverlap(int $excludeId, int $tableId, string $startsAt, string $endsAt): ?array
+    public function findOverlap(int $excludeId, int $tableId, string $startsAt, string $endsAt, int $turnaroundMinutes = 0): ?array
     {
+        $held = $this->held(startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: $turnaroundMinutes);
         $this->database->query($this->loadSqlFile('reservation-overlapping.sql'));
         $this->database->bind(param: ':id', value: $excludeId);
         $this->database->bind(param: ':table_id', value: $tableId);
-        $this->database->bind(param: ':starts_at', value: $startsAt);
-        $this->database->bind(param: ':ends_at', value: $endsAt);
+        $this->database->bind(param: ':starts_at', value: $held['startsAt']);
+        $this->database->bind(param: ':ends_at', value: $held['endsAt']);
         $result = $this->database->single();
 
         return $result ?: null;
+    }
+
+    /**
+     * The stretch a booking needs a table for: its own time with the turnaround added either side, so it neither starts
+     * inside the previous booking's turnaround nor leaves too little turnaround before the next one. Never shown to customers.
+     *
+     * @return array{startsAt: string, endsAt: string}
+     */
+    private function held(string $startsAt, string $endsAt, int $turnaroundMinutes): array
+    {
+        $none = $turnaroundMinutes < 1;
+        if ($none) return ['startsAt' => $startsAt, 'endsAt' => $endsAt];
+
+        return [
+            'startsAt' => (new \DateTimeImmutable($startsAt))->modify("-{$turnaroundMinutes} minutes")->format('Y-m-d H:i:s'),
+            'endsAt' => (new \DateTimeImmutable($endsAt))->modify("+{$turnaroundMinutes} minutes")->format('Y-m-d H:i:s'),
+        ];
     }
 
     /** The same person asking for the same time twice */

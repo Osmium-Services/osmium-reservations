@@ -29,7 +29,7 @@ class Reservations
     public function rules(mixed $companyHours = null): array
     {
         $config = ReservationConfig::get(companyHours: $companyHours);
-        unset($config['notifyEmails'], $config['diningMinutes']); // The team's addresses and the dining time are not for the page
+        unset($config['notifyEmails'], $config['diningMinutes'], $config['turnaroundMinutes']); // The team's addresses and the table timings are not for the page
 
         return $config;
     }

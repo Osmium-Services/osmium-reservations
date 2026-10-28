@@ -19,10 +19,10 @@ class ReservationAlternatives
     {
     }
 
-    /** Free means some enabled table with enough seats has no confirmed reservation overlapping the time */
+    /** Free means some enabled table with enough seats has no confirmed reservation overlapping the time (or its turnaround) */
     public function isFree(int $partySize, string $startsAt, string $endsAt): bool
     {
-        return $this->reservations->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt) !== null;
+        return $this->reservations->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: (int) ($this->config['turnaroundMinutes'] ?? 0)) !== null;
     }
 
     /** The refusal to show the customer, with what else could work */

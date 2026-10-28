@@ -111,11 +111,13 @@ class ReservationsController extends AdminController
     // Reservations
     // =========================================================================
 
-    /** Confirming gives the reservation a table: the one chosen, or else the smallest free one that fits */
+    /** Confirming gives the reservation a table: the one chosen, the one it was already put on, or else the smallest free one that fits */
     private function confirm(int $id, int $tableId): array
     {
         $model = new Reservation($this->osmium->dataSource);
         $reservation = $this->findOpen(model: $model, id: $id, allowed: ['requested'], verb: 'confirmed');
+        $alreadyPlaced = $tableId < 1 && $reservation['table_id'] !== null;
+        if ($alreadyPlaced) $tableId = (int) $reservation['table_id']; // Put on a table by staff (dragged there): confirm keeps it
         $table = $this->tableFor(model: $model, reservation: $reservation, tableId: $tableId, partySize: (int) $reservation['party_size'], startsAt: $reservation['starts_at'], endsAt: $reservation['ends_at']);
 
         $model->setTable(id: $id, tableId: (int) $table['id']);
@@ -322,9 +324,10 @@ class ReservationsController extends AdminController
     private function tableFor(Reservation $model, ?array $reservation, int $tableId, int $partySize, string $startsAt, string $endsAt): array
     {
         $excludeId = $reservation !== null ? (int) $reservation['id'] : 0;
+        $turnaround = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null)['turnaroundMinutes'];
 
         if ($tableId < 1) {
-            $free = $model->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt, excludeId: $excludeId);
+            $free = $model->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt, excludeId: $excludeId, turnaroundMinutes: $turnaround);
             if ($free === null) throw new \InvalidArgumentException('No table for ' . $partySize . ' is free at ' . (new \DateTimeImmutable($startsAt))->format('H:i \o\n D j M') . '. Change the time or party size first.');
 
             return $free;
@@ -337,10 +340,10 @@ class ReservationsController extends AdminController
         $tooSmall = (int) $table['seats'] < $partySize;
         if ($tooSmall) throw new \InvalidArgumentException($table['name'] . ' seats ' . (int) $table['seats'] . ', so it is too small for ' . $partySize . '. Choose another table.');
 
-        $clash = $model->findOverlap(excludeId: $excludeId, tableId: $tableId, startsAt: $startsAt, endsAt: $endsAt);
+        $clash = $model->findOverlap(excludeId: $excludeId, tableId: $tableId, startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: $turnaround);
         if ($clash !== null) {
             $when = (new \DateTimeImmutable($clash['starts_at']))->format('D j M, H:i');
-            throw new \InvalidArgumentException($table['name'] . ' is already taken by the confirmed reservation for ' . $clash['customer_name'] . ' (' . $when . '). Choose another table or change the time.');
+            throw new \InvalidArgumentException($table['name'] . ' is already taken by the confirmed reservation for ' . $clash['customer_name'] . ' (' . $when . ')' . ($turnaround > 0 ? ', counting the ' . $turnaround . ' minute turnaround' : '') . '. Choose another table or change the time.');
         }
 
         return $table;
@@ -410,6 +413,7 @@ class ReservationsController extends AdminController
             'breaks' => $breaks,
             'stepMinutes' => $input['step_minutes'] ?? 0,
             'diningMinutes' => $input['dining_minutes'] ?? 0,
+            'turnaroundMinutes' => $input['turnaround_minutes'] ?? 0,
             'minParty' => $input['min_party'] ?? 0,
             'maxParty' => $input['max_party'] ?? 0,
             'minNoticeHours' => $input['min_notice_hours'] ?? -1,

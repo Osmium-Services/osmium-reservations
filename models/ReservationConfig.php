@@ -28,6 +28,7 @@ class ReservationConfig
             'maxDaysAhead' => 90,
             'stepMinutes' => 15,
             'diningMinutes' => 90,
+            'turnaroundMinutes' => 0,
             'minParty' => 1,
             'maxParty' => 8,
             'notifyEmails' => [],
@@ -84,6 +85,7 @@ class ReservationConfig
             'maxDaysAhead' => \max(1, \min(730, (int) ($saved['maxDaysAhead'] ?? $defaults['maxDaysAhead']))),
             'stepMinutes' => \in_array($step, self::STEPS, true) ? $step : $defaults['stepMinutes'],
             'diningMinutes' => \max(15, \min(480, (int) ($saved['diningMinutes'] ?? $defaults['diningMinutes']))),
+            'turnaroundMinutes' => \max(0, \min(60, (int) ($saved['turnaroundMinutes'] ?? $defaults['turnaroundMinutes']))),
             'minParty' => \max(1, \min(100, (int) ($saved['minParty'] ?? $defaults['minParty']))),
             'maxParty' => \max(1, \min(100, (int) ($saved['maxParty'] ?? $defaults['maxParty']))),
             'notifyEmails' => self::cleanEmails($saved['notifyEmails'] ?? []),
@@ -165,6 +167,10 @@ class ReservationConfig
         $diningBad = $dining < 15 || $dining > 480;
         if ($diningBad) throw new \InvalidArgumentException('Dining time must be between 15 and 480 minutes');
 
+        $turnaround = (int) ($settings['turnaroundMinutes'] ?? 0);
+        $turnaroundBad = $turnaround < 0 || $turnaround > 60;
+        if ($turnaroundBad) throw new \InvalidArgumentException('Turnaround must be between 0 and 60 minutes');
+
         $minParty = (int) ($settings['minParty'] ?? 0);
         $maxParty = (int) ($settings['maxParty'] ?? 0);
         $partyBad = $minParty < 1 || $maxParty < $minParty || $maxParty > 100;
@@ -174,7 +180,7 @@ class ReservationConfig
         $emailBad = $emails['rejected'] !== [];
         if ($emailBad) throw new \InvalidArgumentException('These are not valid email addresses: ' . \implode(', ', $emails['rejected']));
 
-        return ['windows' => $windows, 'breaks' => $breaks, 'minNoticeHours' => $notice, 'maxDaysAhead' => $ahead, 'stepMinutes' => $step, 'diningMinutes' => $dining, 'minParty' => $minParty, 'maxParty' => $maxParty, 'notifyEmails' => $emails['valid']];
+        return ['windows' => $windows, 'breaks' => $breaks, 'minNoticeHours' => $notice, 'maxDaysAhead' => $ahead, 'stepMinutes' => $step, 'diningMinutes' => $dining, 'turnaroundMinutes' => $turnaround, 'minParty' => $minParty, 'maxParty' => $maxParty, 'notifyEmails' => $emails['valid']];
     }
 
     public static function isTime(string $value): bool

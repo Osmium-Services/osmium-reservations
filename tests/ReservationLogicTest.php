@@ -134,7 +134,7 @@ class ReservationLogicTest extends TestCase
     public function test_settings_are_validated_saved_and_read_back(): void
     {
         $path = \sys_get_temp_dir() . '/osmium-reservations-test-' . \uniqid() . '.json.php';
-        $settings = ['stepMinutes' => '30', 'diningMinutes' => '105', 'minParty' => '2', 'maxParty' => '10', 'minNoticeHours' => '3', 'maxDaysAhead' => '60', 'notifyEmails' => "host@example.com\nmanager@example.com", 'breaks' => [1 => ['start' => '14:30', 'end' => '18:00']]];
+        $settings = ['stepMinutes' => '30', 'diningMinutes' => '105', 'turnaroundMinutes' => '5', 'minParty' => '2', 'maxParty' => '10', 'minNoticeHours' => '3', 'maxDaysAhead' => '60', 'notifyEmails' => "host@example.com\nmanager@example.com", 'breaks' => [1 => ['start' => '14:30', 'end' => '18:00']]];
 
         ReservationConfig::save($settings, $path);
         $read = ReservationConfig::stored($path);
@@ -142,6 +142,7 @@ class ReservationLogicTest extends TestCase
 
         $this->assertSame(30, $read['stepMinutes']);
         $this->assertSame(105, $read['diningMinutes']);
+        $this->assertSame(5, $read['turnaroundMinutes']);
         $this->assertSame(2, $read['minParty']);
         $this->assertSame(10, $read['maxParty']);
         $this->assertSame(['host@example.com', 'manager@example.com'], $read['notifyEmails']);
@@ -150,10 +151,10 @@ class ReservationLogicTest extends TestCase
 
     public function test_bad_settings_are_refused(): void
     {
-        $good = ['stepMinutes' => 15, 'diningMinutes' => 90, 'minParty' => 1, 'maxParty' => 8, 'minNoticeHours' => 2, 'maxDaysAhead' => 90, 'notifyEmails' => ''];
+        $good = ['stepMinutes' => 15, 'diningMinutes' => 90, 'turnaroundMinutes' => 5, 'minParty' => 1, 'maxParty' => 8, 'minNoticeHours' => 2, 'maxDaysAhead' => 90, 'notifyEmails' => ''];
         $this->assertIsArray(ReservationConfig::validate($good));
 
-        foreach ([['diningMinutes' => 5], ['diningMinutes' => 600], ['minParty' => 0], ['maxParty' => 0], ['minParty' => 5, 'maxParty' => 4], ['stepMinutes' => 7], ['notifyEmails' => 'nonsense']] as $change) {
+        foreach ([['diningMinutes' => 5], ['diningMinutes' => 600], ['turnaroundMinutes' => 61], ['turnaroundMinutes' => -1], ['minParty' => 0], ['maxParty' => 0], ['minParty' => 5, 'maxParty' => 4], ['stepMinutes' => 7], ['notifyEmails' => 'nonsense']] as $change) {
             try {
                 ReservationConfig::validate($change + $good);
                 $this->fail('Should have been refused: ' . \json_encode($change));

@@ -6,9 +6,9 @@ It books **tables**, not seats: each table has a number of seats, and a booking 
 
 ## Day to day (admin > Reservations)
 
-A **Schedule** for one day with a column for each table, plus a "No table yet" column for requests still waiting: waiting requests and confirmed reservations as blocks at their time, with closed hours and the break shaded, and day arrows. Click a block to see who it is, then confirm or decline a request, change the time, party size or table, or cancel a confirmed one (each emails the customer). **New reservation** takes a phone booking, confirmed at once. Below the schedule, the list of reservations with the Deleted bin.
+A **Schedule** for one day with a column for each table, plus a "No table yet" column for requests still waiting: waiting requests and confirmed reservations as blocks at their time, with closed hours and the break shaded, and day arrows. Drag a block onto another table to move it: the tables it cannot go to (too few seats, or a confirmed booking in the way) are greyed while you drag, and a waiting request can be dragged onto a table, or back to "No table yet", without confirming it. Click a block to see who it is, then confirm or decline a request, change the time, party size or table, or cancel a confirmed one (each emails the customer). **New reservation** takes a phone booking, confirmed at once. Below the schedule, the list of reservations with the Deleted bin.
 
-Confirming gives the reservation a table: the one you choose in the box, or else the smallest free table with enough seats. Only confirmed reservations hold a table, so two waiting requests can ask for the same table; the second one to be confirmed is refused with the name of the booking in the way.
+Confirming gives the reservation a table: the one you choose in the box, the one you already dragged it onto, or else the smallest free table with enough seats. Only confirmed reservations hold a table, so two waiting requests can ask for the same table; the second one to be confirmed is refused with the name of the booking in the way.
 
 ## Setup (admin > Services > Osmium Reservations)
 
@@ -17,6 +17,7 @@ Confirming gives the reservation a table: the one you choose in the box, or else
   - Opening hours come from Company > Location. Bookings may start from opening time up to closing time (or a narrower window set for each weekday, for example last bookings at 21:00), because guests may still be at their table after closing.
   - An optional break each weekday (for example between lunch and dinner): nothing can start in it.
   - **Dining time**: how long a table is held for each booking (for example 90 minutes). Customers are never told it and never asked to leave, but their calendar file ends the event after it.
+  - **Turnaround**: minutes (0 to 60) a table is also held after each booking, to reset it. It counts both ways: nothing can start inside it, and a booking is refused if it would leave too little before the next one. It shows hatched on the Schedule and customers never see it.
   - Smallest party, and the largest party taken online (also never above the biggest table). A bigger party is told to phone, using the number in Company settings.
   - Minimum notice, how far ahead, time step, and who is emailed.
 - When there is no table for the time asked for, the customer is told the nearest earlier and later times that day that have one.

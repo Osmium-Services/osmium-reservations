@@ -34,8 +34,10 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
             <span><span class="sched-key sched-confirmed"></span> Confirmed</span>
             <span><span class="sched-key sched-break"></span> Not taking bookings</span>
             <span><span class="sched-key sched-closed"></span> Closed</span>
+            <span><span class="sched-key sched-turn"></span> Turnaround</span>
         </div>
         <div id="scheduleGrid" class="sched-scroll"></div>
+        <div id="scheduleMessage" class="alert d-none mt-3"></div>
     </div>
 </div>
 <style nonce="<?= $cspNonce ?? '' ?>">
@@ -49,12 +51,17 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
     .sched-shade { position: absolute; left: 0; right: 0; }
     .sched-closed { background: repeating-linear-gradient(135deg, rgba(128,128,128,.28), rgba(128,128,128,.28) 4px, rgba(128,128,128,.12) 4px, rgba(128,128,128,.12) 8px); }
     .sched-break { background: rgba(13, 110, 253, .22); }
-    .sched-appt { position: absolute; left: 3px; right: 3px; border-radius: .35rem; padding: .15rem .35rem; font-size: .78rem; line-height: 1.2; overflow: hidden; cursor: pointer; border: 1px solid transparent; text-align: left; z-index: 2; color: #fff; }
+    .sched-turn { background: repeating-linear-gradient(0deg, rgba(128,128,128,.35), rgba(128,128,128,.35) 2px, transparent 2px, transparent 5px); pointer-events: none; }
+    .sched-appt { touch-action: none; position: absolute; left: 3px; right: 3px; border-radius: .35rem; padding: .15rem .35rem; font-size: .78rem; line-height: 1.2; overflow: hidden; cursor: grab; border: 1px solid transparent; text-align: left; z-index: 2; color: #fff; }
     .sched-appt small { display: block; opacity: .9; }
     .sched-requested { background: #b8860b; border-color: #e0a800; }
     .sched-confirmed { background: #1f8f4e; border-color: #28a745; }
     .sched-key { display: inline-block; width: .9rem; height: .9rem; border-radius: .2rem; vertical-align: -.15rem; margin-right: .25rem; }
-    .sched-key.sched-closed, .sched-key.sched-break { border: 1px solid var(--bs-border-color, #ccc); }
+    .sched-key.sched-closed, .sched-key.sched-break, .sched-key.sched-turn { border: 1px solid var(--bs-border-color, #ccc); }
+    .sched-dragging { z-index: 10; opacity: .85; cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+    .sched-col.sched-yes { background: rgba(40, 167, 69, .08); }
+    .sched-col.sched-no { background: rgba(128, 128, 128, .22); }
+    .sched-col.sched-over { background: rgba(40, 167, 69, .25); }
     .sched-note { padding: 1rem; color: var(--bs-secondary-color, #888); }
 </style>
 
@@ -148,7 +155,8 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
         tables: <?= \json_encode(\array_column($admin['tables'], null, 'id'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
         schedule: {
             hours: <?= \json_encode($settings['hours'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
-            step: <?= (int) $settings['stepMinutes'] ?>
+            step: <?= (int) $settings['stepMinutes'] ?>,
+            turnaround: <?= (int) $settings['turnaroundMinutes'] ?>
         }
     };
 </script>
