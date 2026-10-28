@@ -31,6 +31,7 @@ class ReservationConfig
             'turnaroundMinutes' => 0,
             'minParty' => 1,
             'maxParty' => 8,
+            'autoAnswer' => false,
             'notifyEmails' => [],
         ];
     }
@@ -88,6 +89,7 @@ class ReservationConfig
             'turnaroundMinutes' => \max(0, \min(60, (int) ($saved['turnaroundMinutes'] ?? $defaults['turnaroundMinutes']))),
             'minParty' => \max(1, \min(100, (int) ($saved['minParty'] ?? $defaults['minParty']))),
             'maxParty' => \max(1, \min(100, (int) ($saved['maxParty'] ?? $defaults['maxParty']))),
+            'autoAnswer' => !empty($saved['autoAnswer']),
             'notifyEmails' => self::cleanEmails($saved['notifyEmails'] ?? []),
         ];
     }
@@ -180,7 +182,7 @@ class ReservationConfig
         $emailBad = $emails['rejected'] !== [];
         if ($emailBad) throw new \InvalidArgumentException('These are not valid email addresses: ' . \implode(', ', $emails['rejected']));
 
-        return ['windows' => $windows, 'breaks' => $breaks, 'minNoticeHours' => $notice, 'maxDaysAhead' => $ahead, 'stepMinutes' => $step, 'diningMinutes' => $dining, 'turnaroundMinutes' => $turnaround, 'minParty' => $minParty, 'maxParty' => $maxParty, 'notifyEmails' => $emails['valid']];
+        return ['windows' => $windows, 'breaks' => $breaks, 'minNoticeHours' => $notice, 'maxDaysAhead' => $ahead, 'stepMinutes' => $step, 'diningMinutes' => $dining, 'turnaroundMinutes' => $turnaround, 'minParty' => $minParty, 'maxParty' => $maxParty, 'autoAnswer' => !empty($settings['autoAnswer']), 'notifyEmails' => $emails['valid']];
     }
 
     public static function isTime(string $value): bool

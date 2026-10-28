@@ -28,6 +28,30 @@ class ReservationMail
     }
 
     /**
+     * The table asked for is taken, so say which times are free; nothing is booked until they pick one
+     *
+     * @param list<string> $times H:i
+     * @return array{subject: string, html: string}
+     */
+    public static function options(array $reservation, string $siteName, array $times, string $phone): array
+    {
+        $start = new \DateTimeImmutable($reservation['starts_at']);
+        $people = (int) $reservation['party_size'] . ((int) $reservation['party_size'] === 1 ? ' person' : ' people');
+        $free = \count($times) > 1 ? \implode(', ', \array_slice($times, 0, -1)) . ' or ' . \end($times) : $times[0];
+        $reply = $phone !== '' ? 'Reply to this email or call us on ' . $phone . ' and we will book it for you.' : 'Reply to this email and we will book it for you.';
+
+        return self::compose(
+            siteName: $siteName,
+            subject: 'Other times we can offer you',
+            heading: 'Thanks, ' . $reservation['customer_name'],
+            paragraphs: [
+                'We are full for ' . $people . ' at ' . $start->format('H:i') . ' on ' . $start->format('l j F') . ', but we could seat you at ' . $free . '. ' . $reply . ' Nothing is booked yet.',
+                self::details($reservation),
+            ],
+        );
+    }
+
+    /**
      * @return array{subject: string, html: string}
      */
     public static function confirmed(array $reservation, string $siteName, string $icsUrl, string $googleUrl): array
@@ -117,6 +141,15 @@ class ReservationMail
                 '<p><a href="' . self::e($adminUrl) . '">Confirm or decline it in the admin</a></p>',
             ],
         );
+    }
+
+    /** The text message for a changed time: short, plain, and never the dining time or table */
+    public static function changedText(array $reservation, string $siteName): string
+    {
+        $people = (int) $reservation['party_size'];
+        $when = (new \DateTimeImmutable($reservation['starts_at']))->format('D j M \a\t H:i');
+
+        return 'Your table at ' . $siteName . ' is now ' . $when . ' for ' . $people . ($people === 1 ? ' person' : ' people') . '. Please call us if that does not suit.';
     }
 
     /** The one-line summary used as a calendar event's title */

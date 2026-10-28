@@ -123,7 +123,7 @@ class Reservation extends Model
     }
 
     /**
-     * The smallest enabled table with room for the party that has no confirmed or seated reservation overlapping the time, or
+     * The smallest enabled table with room for the party that has no reservation holding it (waiting, confirmed or arrived) overlapping the time, or
      * null when there is none. The reservation being moved (excludeId, 0 for a new one) never counts against itself.
      *
      * @return array<string, mixed>|null
@@ -141,7 +141,7 @@ class Reservation extends Model
         return $result ?: null;
     }
 
-    /** The earliest confirmed or seated reservation on this table that overlaps the time, other than the reservation itself */
+    /** The earliest reservation holding this table (waiting, confirmed or arrived) that overlaps the time, other than the reservation itself */
     public function findOverlap(int $excludeId, int $tableId, string $startsAt, string $endsAt, int $turnaroundMinutes = 0): ?array
     {
         $held = $this->held(startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: $turnaroundMinutes);

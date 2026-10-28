@@ -10,6 +10,14 @@ A **Schedule** for one day with a column for each table, plus a "No table yet" c
 
 Confirming gives the reservation a table: the one you choose in the box, the one you already dragged it onto, or else the smallest free table with enough seats. Only confirmed and arrived reservations hold a table, so two waiting requests can ask for the same table; the second one to be confirmed is refused with the name of the booking in the way.
 
+**Live:** the schedule refreshes itself every few seconds (switch Live off to stop it) and a short feed says what changed. It does not pause for you mid-drag or with a box open.
+
+**Waiting requests hold a table.** A new request is put on the smallest free table that fits as soon as it arrives, so the schedule reads like a floor plan; declining or cancelling frees it.
+
+**Moving a confirmed booking in time:** drag its block up or down (it snaps to the time step). A new time asks whether to email, and text when an SMS provider is installed and the booking has a phone number.
+
+**When no table is free** the screen offers the nearest free times (within two hours) as one-click buttons that move the booking and confirm it.
+
 ## Setup (admin > Services > Osmium Reservations)
 
 - **Tables**: a name and a number of seats. A table can be switched off without deleting it. Customers never choose or see a table.
@@ -33,7 +41,15 @@ POST the form to `/api/reservations` with `token`, honeypot `zip`, `party_size`,
 
 ## Updating
 
-Updating from the Store replaces the files but does not run new migrations: after updating to 0.3.0, press Run Migrations (it adds the Arrived status).
+Updating from the Store replaces the files but does not run new migrations: from 0.2.0 or earlier, press Run Migrations after updating (it adds the Arrived status).
+
+## Automatic answers
+
+Setup has an "Answer web requests automatically" switch (off by default). On: when the exact table is free the request is booked and confirmed at once; when it is full the customer is emailed the nearest free times and the request waits for their answer. Off: every request waits for you.
+
+## Dev simulation
+
+`tools/simulate.php` is a dev-only tool that plays a busy period in real time through the same code the screen uses (inside the php container: `php app/services/osmium-reservations/tools/simulate.php --every=20 --arrivals=48 --fresh --seed`). Never run it on a live site.
 
 ## Hooks
 

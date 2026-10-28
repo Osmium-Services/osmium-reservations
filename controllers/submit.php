@@ -3,13 +3,7 @@
 use Osmium\Core\Library\ServiceHooks;
 use Osmium\Core\Library\ServiceLoader;
 use Osmium\Core\Models\ServiceModel;
-use Osmium\Services\OsmiumReservations\Models\Reservation;
-use Osmium\Services\OsmiumReservations\Models\ReservationAlternatives;
-use Osmium\Services\OsmiumReservations\Models\ReservationConfig;
-use Osmium\Services\OsmiumReservations\Models\ReservationNotifier;
 use Osmium\Services\OsmiumReservations\Models\ReservationRequest;
-use Osmium\Services\OsmiumReservations\Models\ReservationRules;
-use Osmium\Services\OsmiumReservations\Models\ReservationTable;
 use Osmium\Services\OsmiumReservations\Models\Reservations;
 
 /**
@@ -59,27 +53,8 @@ if ($looksLikeABot) {
 
 try {
     $request = ReservationRequest::parse($_POST);
-
-    $config = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null);
-    $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
-    ReservationRules::party(config: $config, partySize: $request['partySize'], largestTable: (new ReservationTable($this->osmium->dataSource))->largestParty(), phone: $phone);
-
-    $now = new \DateTimeImmutable('now');
-    $slot = ReservationRules::slot(config: $config, date: $request['date'], time: $request['time'], now: $now);
-
-    $reservations = new Reservation($this->osmium->dataSource);
-    $alternatives = new ReservationAlternatives(reservations: $reservations, config: $config, now: $now);
-
-    $taken = !$alternatives->isFree($request['partySize'], $slot['startsAt'], $slot['endsAt']);
-    if ($taken) throw new \InvalidArgumentException($alternatives->message(date: $request['date'], time: $request['time'], partySize: $request['partySize']));
-
-    $isDuplicate = $reservations->isDuplicate(email: $request['email'], startsAt: $slot['startsAt']);
-    if ($isDuplicate) throw new \InvalidArgumentException('You have already asked for that time. We will be in touch.');
-
-    $created = $reservations->create(request: $request, startsAt: $slot['startsAt'], endsAt: $slot['endsAt']);
-    (new ReservationNotifier($this->osmium))->requested($reservations->get($created['id']));
-
-    $notice('sent', 'Thanks, your request has been sent. We will confirm it by email.');
+    $desk = new ReservationDesk(osmium: $this->osmium);
+    $notice('sent', $desk->acceptRequest(request: $request, now: new \DateTimeImmutable('now')));
 } catch (\InvalidArgumentException $e) {
     $notice('failed', $e->getMessage()); // These messages are written for the customer
 } catch (\Throwable $e) {

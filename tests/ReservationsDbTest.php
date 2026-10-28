@@ -88,17 +88,21 @@ class ReservationsDbTest extends DatabaseTestCase
         $this->assertSame(0, (new ReservationTable($this->db))->largestParty());
     }
 
-    public function test_only_a_confirmed_reservation_holds_a_table(): void
+    public function test_a_waiting_request_holds_its_table_but_one_without_a_table_holds_nothing(): void
     {
         $reservations = new Reservation($this->db);
         $table = $this->table('zzOnly', 4);
-        $this->confirmed($reservations, 4, $table, '2026-11-05 19:00:00', '2026-11-05 20:30:00');
-        $reservations->create($this->request(2, $table, 'x@example.com'), '2026-11-05 12:00:00', '2026-11-05 13:30:00');
+        $placed = $reservations->create($this->request(2, $table, 'x@example.com'), '2026-11-05 19:00:00', '2026-11-05 20:30:00');
+        $reservations->setTable(id: (int) $placed['id'], tableId: $table);
+        $reservations->create($this->request(2, null, 'y@example.com'), '2026-11-05 12:00:00', '2026-11-05 13:30:00');
 
-        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 19:30:00', '2026-11-05 21:00:00'), 'Overlaps the confirmed one');
-        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 12:30:00', '2026-11-05 14:00:00'), 'A waiting request holds nothing');
+        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 19:30:00', '2026-11-05 21:00:00'), 'Overlaps the placed request');
+        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 12:30:00', '2026-11-05 14:00:00'), 'A request with no table holds nothing');
         $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 20:30:00', '2026-11-05 22:00:00'), 'Touching ends are fine');
         $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 17:30:00', '2026-11-05 19:00:00'));
+
+        $reservations->setStatus(id: (int) $placed['id'], status: 'declined', sequence: 0);
+        $this->assertNotNull($reservations->findFreeTable(2, '2026-11-05 19:30:00', '2026-11-05 21:00:00'), 'Declining frees the table');
     }
 
     public function test_a_reservation_never_clashes_with_itself_and_cancelled_ones_hold_nothing(): void
@@ -193,6 +197,23 @@ class ReservationsDbTest extends DatabaseTestCase
         $this->assertSame('Sorry, we have no table for 4 people at 19:30. We could do 17:30 or 20:30 that day.', $message);
         $this->assertTrue($alternatives->isFree(4, '2026-11-05 20:30:00', '2026-11-05 22:00:00'));
         $this->assertFalse($alternatives->isFree(4, '2026-11-05 19:30:00', '2026-11-05 21:00:00'));
+    }
+
+    public function test_a_booking_being_moved_does_not_block_its_own_nearby_times(): void
+    {
+        $reservations = new Reservation($this->db);
+        $table = $this->table('zzMove', 4);
+        $id = $this->confirmed($reservations, 4, $table, '2026-11-05 19:00:00', '2026-11-05 20:30:00');
+        $day = ['open' => '12:00', 'close' => '21:00', 'breakStart' => null, 'breakEnd' => null];
+        $config = ReservationConfig::defaults() + ['hours' => [4 => $day]];
+        $alternatives = new ReservationAlternatives(reservations: $reservations, config: $config, now: new \DateTimeImmutable('2026-11-05 00:00:00'));
+
+        $others = $alternatives->nearestTimes(date: '2026-11-05', requested: '19:00', partySize: 4);
+        $own = $alternatives->nearestTimes(date: '2026-11-05', requested: '19:00', partySize: 4, excludeId: $id);
+
+        $this->assertNotContains('19:15', $others);
+        $this->assertContains('18:45', $own);
+        $this->assertContains('19:15', $own);
     }
 
     public function test_a_deleted_reservation_leaves_lists_and_comes_back_when_restored(): void

@@ -72,6 +72,13 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
                     <input type="number" class="form-control" id="settingsTurnaround" min="0" max="60" value="<?= (int) $settings['turnaroundMinutes'] ?>">
                     <div class="form-text">Held after each booking to reset the table. Customers never see it.</div>
                 </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="settingsAuto" <?= !empty($settings['autoAnswer']) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="settingsAuto">Answer web requests automatically</label>
+                    </div>
+                    <div class="form-text">When the exact table is free the request is booked and confirmed at once. When it is not, the customer is emailed the nearest free times and the request waits for their answer. Off: every request waits for you.</div>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label" for="settingsMinParty">Smallest party</label>
                     <input type="number" class="form-control" id="settingsMinParty" min="1" max="100" value="<?= (int) $settings['minParty'] ?>">

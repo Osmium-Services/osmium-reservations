@@ -12,6 +12,12 @@ class ReservationAlternatives
 {
     private const MAX_TIMES = 2;
 
+    /** Only times within this long of the one asked for are offered: "slightly earlier or later", not another meal */
+    private const MAX_AWAY_MINUTES = 120;
+
+    /** A reservation being moved must not count as blocking its own new time */
+    private int $excludeId = 0;
+
     /**
      * @param array<string, mixed> $config the rules from ReservationConfig::get() (with hours)
      */
@@ -22,7 +28,7 @@ class ReservationAlternatives
     /** Free means some enabled table with enough seats has no confirmed reservation overlapping the time (or its turnaround) */
     public function isFree(int $partySize, string $startsAt, string $endsAt): bool
     {
-        return $this->reservations->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt, turnaroundMinutes: (int) ($this->config['turnaroundMinutes'] ?? 0)) !== null;
+        return $this->reservations->findFreeTable(partySize: $partySize, startsAt: $startsAt, endsAt: $endsAt, excludeId: $this->excludeId, turnaroundMinutes: (int) ($this->config['turnaroundMinutes'] ?? 0)) !== null;
     }
 
     /** The refusal to show the customer, with what else could work */
@@ -40,10 +46,12 @@ class ReservationAlternatives
      * The start times closest to the one asked for on the same day that have a table: one earlier and one later where
      * possible
      *
+     * @param int $excludeId a reservation that is being moved, so it does not block itself
      * @return list<string> H:i, in time order
      */
-    private function nearestTimes(string $date, string $requested, int $partySize): array
+    public function nearestTimes(string $date, string $requested, int $partySize, int $excludeId = 0): array
     {
+        $this->excludeId = $excludeId;
         $hours = $this->config['hours'][(int) (new \DateTimeImmutable($date))->format('N')] ?? null;
         if ($hours === null) return [];
 
@@ -51,7 +59,8 @@ class ReservationAlternatives
         $wanted = $this->minutesOf($requested);
         $candidates = [];
         for ($at = $this->minutesOf($hours['open']); $at <= $this->minutesOf($hours['close']); $at += $step) {
-            if ($at % $step !== 0 || $at === $wanted) continue;
+            $tooFar = \abs($at - $wanted) > self::MAX_AWAY_MINUTES;
+            if ($at % $step !== 0 || $at === $wanted || $tooFar) continue;
 
             $time = \sprintf('%02d:%02d', \intdiv($at, 60), $at % 60);
             if ($this->suits($date, $time, $partySize)) $candidates[] = $at;

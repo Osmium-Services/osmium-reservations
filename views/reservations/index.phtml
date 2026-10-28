@@ -21,6 +21,10 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h5 class="mb-0" id="scheduleTitle">Schedule</h5>
         <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="form-check form-switch mb-0 me-2" title="Refresh by itself every few seconds, so new requests and changes appear without reloading">
+                <input class="form-check-input" type="checkbox" id="scheduleLive" checked>
+                <label class="form-check-label small" for="scheduleLive">Live</label>
+            </div>
             <button type="button" class="btn btn-sm btn-primary" id="scheduleNew"><i class="bx bx-plus me-1"></i>New reservation</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="scheduleToday">Today</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="schedulePrev" aria-label="Previous day"><i class="bx bx-chevron-left"></i></button>
@@ -39,6 +43,7 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
         </div>
         <div id="scheduleGrid" class="sched-scroll"></div>
         <div id="scheduleMessage" class="alert d-none mt-3"></div>
+        <div id="scheduleFeed" class="small mt-3 d-none" aria-live="polite"></div>
     </div>
 </div>
 <style nonce="<?= $cspNonce ?? '' ?>">
@@ -151,6 +156,34 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
     </div>
 </div>
 
+<div class="modal fade" id="moveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change the time?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="moveText"></p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="moveEmail">
+                    <label class="form-check-label" for="moveEmail" id="moveEmailLabel">Email the new time</label>
+                </div>
+                <div class="form-check mb-2" id="moveSmsRow">
+                    <input class="form-check-input" type="checkbox" id="moveSms">
+                    <label class="form-check-label" for="moveSms" id="moveSmsLabel">Text the new time</label>
+                </div>
+                <div class="form-text">Untick both to move the booking without telling them.</div>
+                <div id="moveResult" class="alert d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="moveGo">Move it</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script nonce="<?= $cspNonce ?? '' ?>">
     window.OsmiumReservationsConfig = {
         basePath: adminBasePath,
@@ -159,7 +192,8 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
         schedule: {
             hours: <?= \json_encode($settings['hours'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
             step: <?= (int) $settings['stepMinutes'] ?>,
-            turnaround: <?= (int) $settings['turnaroundMinutes'] ?>
+            turnaround: <?= (int) $settings['turnaroundMinutes'] ?>,
+            sms: <?= $admin['smsReady'] ? 'true' : 'false' ?>
         }
     };
 </script>

@@ -20,10 +20,13 @@ class ReservationNotifier
     {
     }
 
-    public function requested(array $reservation): void
+    /**
+     * @param bool $tellCustomer false when the customer is told something else straight away (booked, or other times offered)
+     */
+    public function requested(array $reservation, bool $tellCustomer = true): void
     {
         $siteName = $this->siteName();
-        $this->send(to: $reservation['customer_email'], mail: ReservationMail::received($reservation, $siteName));
+        if ($tellCustomer) $this->send(to: $reservation['customer_email'], mail: ReservationMail::received($reservation, $siteName));
 
         $adminUrl = $this->osmium->config->site->FQDN . '/' . $this->osmium->config->site->adminPath . '/reservations' . $this->slash();
         $team = ReservationMail::requestForTeam(reservation: $reservation, siteName: $siteName, adminUrl: $adminUrl);
@@ -34,16 +37,41 @@ class ReservationNotifier
         $this->announce(event: 'reservation.requested', reservation: $reservation);
     }
 
+    /**
+     * @param list<string> $times the free times to offer, H:i
+     */
+    public function options(array $reservation, array $times): void
+    {
+        $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
+        $this->send(to: $reservation['customer_email'], mail: ReservationMail::options($reservation, $this->siteName(), $times, $phone));
+    }
+
     public function confirmed(array $reservation): void
     {
         $this->send(to: $reservation['customer_email'], mail: ReservationMail::confirmed($reservation, $this->siteName(), $this->icsUrl($reservation), $this->googleUrl($reservation)));
         $this->announce(event: 'reservation.confirmed', reservation: $reservation);
     }
 
-    public function changed(array $reservation): void
+    /**
+     * @param bool $email tell the customer by email (the default)
+     * @param bool $sms also text them, when an SMS provider is installed and the booking has a phone number
+     */
+    public function changed(array $reservation, bool $email = true, bool $sms = false): void
     {
-        $this->send(to: $reservation['customer_email'], mail: ReservationMail::changed($reservation, $this->siteName(), $this->icsUrl($reservation), $this->googleUrl($reservation)));
+        if ($email) $this->send(to: $reservation['customer_email'], mail: ReservationMail::changed($reservation, $this->siteName(), $this->icsUrl($reservation), $this->googleUrl($reservation)));
+        if ($sms) $this->text(to: (string) ($reservation['customer_phone'] ?? ''), body: ReservationMail::changedText($reservation, $this->siteName()));
         $this->announce(event: 'reservation.changed', reservation: $reservation);
+    }
+
+    /** Whether a text can really be sent: an SMS provider service is installed and set up */
+    public function smsReady(): bool
+    {
+        foreach ($this->hooks()->collect('sms.providers') as $provider) {
+            $ready = \is_array($provider) && !empty($provider['ready']);
+            if ($ready) return true;
+        }
+
+        return false;
     }
 
     public function declined(array $reservation, string $message = ''): void
@@ -109,9 +137,29 @@ class ReservationNotifier
         }
     }
 
+    private function hooks(): ServiceHooks
+    {
+        return new ServiceHooks(new ServiceLoader(new ServiceModel($this->osmium->dataSource)));
+    }
+
+    /** A text to the customer through whichever SMS provider is installed; a failure is logged and never stops the change */
+    private function text(string $to, string $body): void
+    {
+        $noPhone = \trim($to) === '';
+        if ($noPhone) return;
+
+        try {
+            $result = $this->hooks()->handle('sms.send', ['to' => $to, 'body' => $body]);
+            $failed = \is_array($result) && empty($result['sent']);
+            if ($failed) \error_log('Reservations: text to ' . $to . ' failed: ' . ($result['detail'] ?? 'unknown error'));
+        } catch (\Throwable $e) {
+            \error_log('Reservations: text to ' . $to . ' failed: ' . $e->getMessage());
+        }
+    }
+
     private function announce(string $event, array $reservation): void
     {
-        $hooks = new ServiceHooks(new ServiceLoader(new ServiceModel($this->osmium->dataSource)));
+        $hooks = $this->hooks();
         $hooks->dispatch($event, ['reservation' => $reservation, 'reservationId' => (int) $reservation['id'], 'dataSource' => $this->osmium->dataSource, 'osmium' => $this->osmium]);
     }
 }

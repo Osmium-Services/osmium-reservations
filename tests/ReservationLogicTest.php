@@ -231,4 +231,34 @@ class ReservationLogicTest extends TestCase
         $this->assertStringNotContainsString('<script>', $team['html']);
         $this->assertStringNotContainsString('<b>Pat</b>', $team['html']);
     }
+
+    public function test_the_text_for_a_changed_time_names_the_time_and_never_the_table(): void
+    {
+        $text = ReservationMail::changedText(['party_size' => 4, 'starts_at' => '2026-11-05 19:45:00', 'table_id' => 3], 'Chez Test');
+
+        $this->assertSame('Your table at Chez Test is now Thu 5 Nov at 19:45 for 4 people. Please call us if that does not suit.', $text);
+    }
+
+    public function test_answering_automatically_is_off_until_it_is_switched_on_and_is_saved(): void
+    {
+        $this->assertFalse(ReservationConfig::defaults()['autoAnswer']);
+
+        $on = ReservationConfig::validate(['stepMinutes' => 15, 'minNoticeHours' => 2, 'maxDaysAhead' => 90, 'diningMinutes' => 90, 'turnaroundMinutes' => 0, 'minParty' => 1, 'maxParty' => 8, 'autoAnswer' => true]);
+        $off = ReservationConfig::validate(['stepMinutes' => 15, 'minNoticeHours' => 2, 'maxDaysAhead' => 90, 'diningMinutes' => 90, 'turnaroundMinutes' => 0, 'minParty' => 1, 'maxParty' => 8]);
+
+        $this->assertTrue($on['autoAnswer']);
+        $this->assertFalse($off['autoAnswer']);
+    }
+
+    public function test_the_email_offering_other_times_names_them_and_says_nothing_is_booked(): void
+    {
+        $reservation = ['party_size' => 4, 'starts_at' => '2026-10-29 19:30:00', 'customer_name' => 'Pat', 'reference' => 'ABC123'];
+
+        $mail = ReservationMail::options($reservation, 'Chez Test', ['19:15', '19:45'], '01234567890');
+
+        $this->assertSame('Other times we can offer you', $mail['subject']);
+        $this->assertStringContainsString('We are full for 4 people at 19:30 on Thursday 29 October, but we could seat you at 19:15 or 19:45.', $mail['html']);
+        $this->assertStringContainsString('call us on 01234567890', $mail['html']);
+        $this->assertStringContainsString('Nothing is booked yet.', $mail['html']);
+    }
 }

@@ -30,6 +30,64 @@
         return response.json();
     }
 
+    // When no table is free the server also says which nearby times are: one button each moves the booking there (and confirms a waiting request)
+    function offerTimes(resultId, reservationId, times) {
+        const item = config.reservations[reservationId];
+        const list = Array.isArray(times) ? times : [];
+        if (!item || list.length === 0) return;
+
+        const box = byId(resultId);
+        const row = document.createElement('div');
+        row.className = 'mt-2 d-flex flex-wrap gap-2';
+        list.forEach(function (time) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-primary';
+            button.textContent = (item.status === 'requested' ? 'Book ' : 'Move to ') + time + (item.status === 'requested' ? ' and confirm' : '');
+            button.addEventListener('click', async function () {
+                row.querySelectorAll('button').forEach(function (other) { other.disabled = true; });
+                try {
+                    const moved = await post({
+                        action: 'reschedule', id: item.id, party_size: item.partySize, table_id: 0,
+                        date: item.date, time: time, admin_notes: item.adminNotes
+                    });
+                    const confirmed = moved.success && item.status === 'requested' ? await post({ action: 'confirm', id: item.id, table_id: 0 }) : moved;
+                    if (confirmed.success) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    show(resultId, 'danger', confirmed.error || 'That did not work');
+                } catch (error) {
+                    show(resultId, 'danger', 'An error occurred');
+                }
+            });
+            row.appendChild(button);
+        });
+        box.appendChild(row);
+    }
+
+    // A booking being taken by phone found no table: one button per free time puts it in the form and books it
+    function offerTimesForNew(resultId, times) {
+        const list = Array.isArray(times) ? times : [];
+        if (list.length === 0) return;
+
+        const row = document.createElement('div');
+        row.className = 'mt-2 d-flex flex-wrap gap-2';
+        list.forEach(function (time) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-primary';
+            button.textContent = 'Book ' + time + ' instead';
+            button.addEventListener('click', function () {
+                byId('reservationTime').value = time;
+                byId('reservationForm').requestSubmit();
+            });
+            row.appendChild(button);
+        });
+        byId(resultId).appendChild(row);
+    }
+
     // Saves a form's payload, reloads on success and shows the problem in the form's own message box otherwise
     async function submit(event, resultId, payload) {
         event.preventDefault();
@@ -43,6 +101,8 @@
             }
 
             show(resultId, 'danger', result.error || 'Failed to save');
+            const isNewBooking = resultId === 'reservationResult' && byId('reservationId').value === '';
+            if (isNewBooking) offerTimesForNew(resultId, result.alternatives);
         } catch (error) {
             show(resultId, 'danger', 'An error occurred while saving');
         }
@@ -115,6 +175,7 @@
             }
 
             show('reservationResult', 'danger', result.error || 'That did not work');
+            offerTimes('reservationResult', payload.id, result.alternatives);
         } catch (error) {
             show('reservationResult', 'danger', 'An error occurred');
         }
@@ -188,6 +249,7 @@
             turnaround_minutes: byId('settingsTurnaround').value,
             min_party: byId('settingsMinParty').value,
             max_party: byId('settingsMaxParty').value,
+            auto_answer: byId('settingsAuto').checked,
             min_notice_hours: byId('settingsNotice').value,
             max_days_ahead: byId('settingsAhead').value,
             notify_emails: byId('settingsEmails').value
@@ -278,34 +340,33 @@
         });
     }
 
-    // ---- Dragging a booking to another table ----
+    // ---- Dragging a booking to another table, or to another time ----
 
     const DRAG_THRESHOLD = 6;
     let justDragged = false;
 
-    // Why this booking cannot sit at that table, or '' when it can: switched off, too few seats, or a confirmed booking in the way
-    function whyNot(item, tableId) {
+    // Why this booking cannot sit at that table from startMinutes to endMinutes, or '' when it can: switched off, too few seats, or a confirmed booking in the way
+    function whyNot(item, tableId, startMinutes, endMinutes) {
         const table = config.tables[tableId];
         if (!table || !table.enabled) return 'That table is switched off';
         if (Number(table.seats) < Number(item.partySize)) return table.name + ' seats ' + table.seats + ', too small for ' + item.partySize;
 
         const turnaround = config.schedule.turnaround || 0;
-        const start = toMinutes(item.time);
-        const end = toMinutes(item.endTime);
         const clash = Object.values(config.reservations).filter(function (other) {
-            return other.id !== item.id && (other.status === 'confirmed' || other.status === 'seated') && other.date === item.date && String(other.tableId) === String(tableId)
-                && toMinutes(other.time) < end + turnaround && toMinutes(other.endTime) + turnaround > start;
+            return other.id !== item.id && other.status !== 'declined' && other.status !== 'cancelled' && other.date === item.date && String(other.tableId) === String(tableId)
+                && toMinutes(other.time) < endMinutes + turnaround && toMinutes(other.endTime) + turnaround > startMinutes;
         })[0];
 
         return clash ? table.name + ' is taken by ' + clash.customerName + ' at ' + clash.time : '';
     }
 
-    // Lights up the tables the booking could go to and greys the rest; a waiting request may also go back to "No table yet"
-    function markLanes(lanes, item) {
+    // Lights up the tables the booking could go to (at the time it is being dragged to) and greys the rest; a waiting request may also go back to "No table yet"
+    function markLanes(lanes, item, startMinutes) {
+        const endMinutes = startMinutes + toMinutes(item.endTime) - toMinutes(item.time);
         lanes.forEach(function (lane) {
-            const isCurrent = lane.dataset.table === String(item.tableId);
+            const isCurrent = lane.dataset.table === String(item.tableId) && startMinutes === toMinutes(item.time);
             const noTable = lane.dataset.table === '';
-            const reason = noTable ? (item.status === 'requested' ? '' : 'A confirmed booking needs a table') : whyNot(item, lane.dataset.table);
+            const reason = noTable ? (item.status === 'requested' ? '' : 'A confirmed booking needs a table') : whyNot(item, lane.dataset.table, startMinutes, endMinutes);
             lane.dataset.reason = reason;
             lane.classList.toggle('sched-yes', reason === '' && !isCurrent);
             lane.classList.toggle('sched-no', reason !== '' && !isCurrent);
@@ -324,21 +385,12 @@
         })[0] || null;
     }
 
-    // blockedReason is why the lane was greyed while dragging ('' when it was fine); the lane's own shading is gone by now
-    async function dropOnTable(item, lane, blockedReason) {
-        clear('scheduleMessage');
-        const sameTable = lane === null || lane.dataset.table === String(item.tableId);
-        if (sameTable) return;
-        if (blockedReason !== '') {
-            show('scheduleMessage', 'warning', blockedReason);
-            return;
-        }
-
+    async function sendMove(item, tableId, time, notify) {
         try {
-            const result = await post({
-                action: 'reschedule', id: item.id, party_size: item.partySize, table_id: lane.dataset.table || 0,
-                date: item.date, time: item.time, admin_notes: item.adminNotes
-            });
+            const result = await post(Object.assign({
+                action: 'reschedule', id: item.id, party_size: item.partySize, table_id: tableId || 0,
+                date: item.date, time: time, admin_notes: item.adminNotes
+            }, notify));
             if (result.success) {
                 window.location.reload();
                 return;
@@ -350,6 +402,55 @@
         }
     }
 
+    // A confirmed customer has been told a time, so a new time asks whether (and how) to tell them first
+    function askToNotify(item, tableId, time) {
+        const hasEmail = item.customerEmail !== '';
+        const hasPhone = item.customerPhone !== '';
+        const canText = Boolean(config.schedule.sms) && hasPhone;
+        const table = tableId ? config.tables[tableId].name : 'no table';
+
+        byId('moveText').textContent = 'Move ' + item.customerName + ' to ' + time + ' on ' + table + '? They were booked for ' + item.time + '.';
+        byId('moveEmail').checked = hasEmail;
+        byId('moveEmail').disabled = !hasEmail;
+        byId('moveEmailLabel').textContent = hasEmail ? 'Email ' + item.customerName + ' the new time' : 'No email address on this booking';
+        byId('moveSmsRow').classList.toggle('d-none', !canText);
+        byId('moveSms').checked = canText && !hasEmail;
+        byId('moveSmsLabel').textContent = 'Text ' + item.customerName + ' the new time (' + item.customerPhone + ')';
+        clear('moveResult');
+
+        const modalElement = byId('moveModal');
+        const modal = new bootstrap.Modal(modalElement);
+        const go = byId('moveGo');
+        const fresh = go.cloneNode(true); // Drops the previous booking's click handler
+        go.replaceWith(fresh);
+        fresh.addEventListener('click', function () {
+            fresh.disabled = true;
+            sendMove(item, tableId, time, { notify_email: byId('moveEmail').checked, notify_sms: byId('moveSms').checked });
+        });
+        fresh.disabled = false;
+        modal.show();
+    }
+
+    // blockedReason is why the lane was greyed while dragging ('' when it was fine); the lane's own shading is gone by now
+    function dropBooking(item, lane, blockedReason, newTime) {
+        clear('scheduleMessage');
+        const tableId = lane === null ? String(item.tableId) : lane.dataset.table;
+        const unchanged = tableId === String(item.tableId) && newTime === item.time;
+        if (unchanged) return;
+        if (blockedReason !== '') {
+            show('scheduleMessage', 'warning', blockedReason);
+            return;
+        }
+
+        const timeChanged = newTime !== item.time;
+        if (item.status === 'confirmed' && timeChanged) {
+            askToNotify(item, tableId, newTime);
+            return;
+        }
+
+        sendMove(item, tableId, newTime, {});
+    }
+
     // A press that moves further than a few pixels is a drag; one that does not is a click and opens the booking
     function makeDraggable(block, item) {
         block.addEventListener('pointerdown', function (e) {
@@ -358,20 +459,31 @@
             const startX = e.clientX;
             const startY = e.clientY;
             const lanes = Array.from(document.querySelectorAll('.sched-col'));
+            const step = config.schedule.step;
+            const originalStart = toMinutes(item.time);
             let dragging = false;
             let target = null;
+            let shown = null;
+            let newStart = originalStart;
 
             const move = function (ev) {
                 const dx = ev.clientX - startX;
                 const dy = ev.clientY - startY;
                 if (!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
 
-                if (!dragging) {
-                    dragging = true;
-                    block.classList.add('sched-dragging');
-                    markLanes(lanes, item);
+                dragging = true;
+                block.classList.add('sched-dragging');
+
+                // Up and down moves the time in whole steps; the block shows exactly where it would land
+                const steps = Math.round(dy / PX_PER_MINUTE / step);
+                newStart = Math.max(0, originalStart + steps * step);
+                block.style.transform = 'translate(' + dx + 'px, ' + (newStart - originalStart) * PX_PER_MINUTE + 'px)';
+                block.title = clock(newStart) + ' ' + item.customerName;
+                if (shown !== newStart) {
+                    markLanes(lanes, item, newStart);
+                    shown = newStart;
                 }
-                block.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+
                 target = laneAt(lanes, ev.clientX);
                 lanes.forEach(function (lane) { lane.classList.toggle('sched-over', lane === target && lane.classList.contains('sched-yes')); });
             };
@@ -385,10 +497,12 @@
 
                 justDragged = true;
                 window.setTimeout(function () { justDragged = false; }, 100);
-                const lane = target;
+
+                // Dropped between columns (or dragged straight up or down): the booking stays on its own table
+                const lane = target !== null ? target : lanes.filter(function (candidate) { return candidate.dataset.table === String(item.tableId); })[0] || null;
                 const blockedReason = lane !== null && lane.classList.contains('sched-no') ? lane.dataset.reason : '';
                 clearLanes(lanes);
-                dropOnTable(item, lane, blockedReason);
+                dropBooking(item, lane, blockedReason, clock(newStart));
             };
 
             block.setPointerCapture(e.pointerId);
@@ -499,6 +613,75 @@
         }
     }
 
+    // ---- Live view: the schedule refreshes itself, and a short feed says what changed ----
+
+    const LIVE_EVERY_MS = 4000;
+    const FEED_LINES = 8;
+    let feed = [];
+
+    function describe(item) {
+        return item.customerName + ', ' + item.partySize + ' at ' + item.time + ' on ' + item.date.slice(8) + '/' + item.date.slice(5, 7);
+    }
+
+    // What changed between two snapshots, in plain words
+    function changesBetween(before, after) {
+        const lines = [];
+        Object.values(after).forEach(function (item) {
+            const old = before[item.id];
+            if (!old) {
+                const where = item.status === 'confirmed' ? 'booked on ' + item.tableName : (item.tableId === '' ? 'waiting, no table (other times offered)' : 'waiting on ' + item.tableName);
+                lines.push(describe(item) + ': ' + where);
+                return;
+            }
+            if (old.status !== item.status) lines.push(describe(item) + ': ' + (item.status === 'seated' ? 'arrived' : item.status) + (item.status === 'confirmed' && item.tableName ? ' on ' + item.tableName : ''));
+            else if (old.time !== item.time || old.date !== item.date) lines.push(describe(item) + ': moved from ' + old.time + (item.tableName ? ' to ' + item.tableName : ''));
+            else if (old.tableName !== item.tableName) lines.push(describe(item) + ': now on ' + (item.tableName || 'no table'));
+        });
+
+        return lines;
+    }
+
+    function showFeed(lines) {
+        const stamp = new Date().toLocaleTimeString('en-GB');
+        lines.forEach(function (line) { feed.unshift(stamp + '  ' + line); });
+        feed = feed.slice(0, FEED_LINES);
+        const box = byId('scheduleFeed');
+        box.classList.toggle('d-none', feed.length === 0);
+        box.textContent = '';
+        feed.forEach(function (line) { box.appendChild(el('div', 'text-muted')).textContent = line; });
+    }
+
+    // Not while someone is in a box or dragging a booking: the screen must not move under them
+    function userIsBusy() {
+        return document.querySelector('.modal.show') !== null || document.querySelector('.sched-dragging') !== null;
+    }
+
+    async function refreshLive() {
+        const live = byId('scheduleLive');
+        if (!live || !live.checked || userIsBusy() || document.hidden) return;
+
+        try {
+            const result = await post({ action: 'snapshot' });
+            if (!result.success) return;
+
+            const lines = changesBetween(config.reservations, result.reservations);
+            const removed = Object.keys(config.reservations).length !== Object.keys(result.reservations).length;
+            const changed = lines.length > 0 || removed || JSON.stringify(config.reservations) !== JSON.stringify(result.reservations);
+            if (!changed) return;
+
+            config.reservations = result.reservations;
+            config.tables = result.tables;
+            const message = byId('scheduleMessage');
+            const keep = { cls: message.className, text: message.textContent };
+            renderSchedule(byId('scheduleDate').value);
+            message.className = keep.cls;
+            message.textContent = keep.text;
+            showFeed(lines);
+        } catch (error) {
+            // A missed refresh is not worth a message: the next one tries again
+        }
+    }
+
     function initSchedule() {
         const input = byId('scheduleDate');
         const draw = function () {
@@ -521,6 +704,7 @@
         on('scheduleNext', 'click', function () { shift(1); });
         input.addEventListener('change', function () { if (input.value) draw(); });
         show(rememberedDate());
+        window.setInterval(refreshLive, LIVE_EVERY_MS);
     }
 
     function init() {
