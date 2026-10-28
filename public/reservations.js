@@ -60,6 +60,7 @@
 
     const DECISIONS = {
         confirm: { button: 'reservationConfirmButton', label: 'Confirm', statuses: ['requested'], sure: false },
+        seat: { button: 'reservationSeatButton', label: 'Arrived', statuses: ['confirmed'], sure: false },
         decline: { button: 'reservationDeclineButton', label: 'Decline request', statuses: ['requested'], sure: true },
         cancel: { button: 'reservationCancelButton', label: 'Cancel reservation', statuses: ['confirmed'], sure: true }
     };
@@ -123,6 +124,7 @@
     // A booking taken by phone or in person: the form opens empty, on the day being looked at
     function openNewReservation(dateText) {
         clear('reservationResult');
+        ['reservationParty', 'reservationTable', 'reservationDate', 'reservationTime'].forEach(function (id) { byId(id).disabled = false; });
         byId('reservationForm').reset();
         byId('reservationId').value = '';
         currentStatus = '';
@@ -154,13 +156,15 @@
         resetDecisionButtons(reservation.status);
         byId('reservationId').value = reservation.id;
         byId('reservationCustomer').textContent = [reservation.customerName, reservation.customerEmail, reservation.customerPhone].filter(Boolean).join(' · ');
-        byId('reservationWho').textContent = reservation.reference + ' · ' + (reservation.status === 'requested' ? 'waiting for you' : reservation.status);
+        byId('reservationWho').textContent = reservation.reference + ' · ' + (reservation.status === 'requested' ? 'waiting for you' : (reservation.status === 'seated' ? 'arrived' : reservation.status));
         byId('reservationTheirNotes').textContent = reservation.customerNotes ? 'They wrote: ' + reservation.customerNotes : '';
         byId('reservationParty').value = reservation.partySize;
         byId('reservationTable').value = reservation.tableId === '' ? '0' : reservation.tableId;
         byId('reservationDate').value = reservation.date;
         byId('reservationTime').value = reservation.time;
         byId('reservationNotes').value = reservation.adminNotes;
+        // Once the party has arrived the table is theirs: only the notes can still change
+        ['reservationParty', 'reservationTable', 'reservationDate', 'reservationTime'].forEach(function (id) { byId(id).disabled = reservation.status === 'seated'; });
         openModal('reservationModal');
     }
 
@@ -244,7 +248,7 @@
 
     function activeOn(dateText) {
         return Object.values(config.reservations).filter(function (item) {
-            return item.date === dateText && (item.status === 'requested' || item.status === 'confirmed');
+            return item.date === dateText && (item.status === 'requested' || item.status === 'confirmed' || item.status === 'seated');
         });
     }
 
@@ -289,7 +293,7 @@
         const start = toMinutes(item.time);
         const end = toMinutes(item.endTime);
         const clash = Object.values(config.reservations).filter(function (other) {
-            return other.id !== item.id && other.status === 'confirmed' && other.date === item.date && String(other.tableId) === String(tableId)
+            return other.id !== item.id && (other.status === 'confirmed' || other.status === 'seated') && other.date === item.date && String(other.tableId) === String(tableId)
                 && toMinutes(other.time) < end + turnaround && toMinutes(other.endTime) + turnaround > start;
         })[0];
 
@@ -461,7 +465,7 @@
                 block.appendChild(document.createTextNode(item.time + ' ' + item.customerName));
                 block.appendChild(el('small')).textContent = 'Party of ' + item.partySize;
                 block.addEventListener('click', function () { if (!justDragged) openReservation(item); });
-                makeDraggable(block, item);
+                if (item.status !== 'seated') makeDraggable(block, item);
                 lane.appendChild(block);
                 if (config.schedule.turnaround > 0) {
                     lane.appendChild(el('div', 'sched-shade sched-turn', {

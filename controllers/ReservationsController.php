@@ -80,13 +80,14 @@ class ReservationsController extends AdminController
         $csrfValid = $this->admin->auth->validateCsrfJson($input);
         if (!$csrfValid) $this->admin->jsonError('Invalid request token. Please refresh and try again.');
 
-        $needsId = \in_array($action, ['confirm', 'decline', 'cancel', 'reschedule', 'delete', 'restore', 'permanently_delete', 'delete_table'], true);
+        $needsId = \in_array($action, ['confirm', 'seat', 'decline', 'cancel', 'reschedule', 'delete', 'restore', 'permanently_delete', 'delete_table'], true);
         $missingParams = !$action || ($needsId && !$id);
         if ($missingParams) $this->admin->jsonError('Missing parameters');
 
         try {
             $result = match ($action) {
                 'confirm' => $this->confirm(id: $id, tableId: (int) ($input['table_id'] ?? 0)),
+                'seat' => $this->seat($id),
                 'decline' => $this->decline(id: $id, message: \trim((string) ($input['message'] ?? ''))),
                 'cancel' => $this->cancel(id: $id, message: \trim((string) ($input['message'] ?? ''))),
                 'create' => $this->createByStaff($input),
@@ -124,6 +125,18 @@ class ReservationsController extends AdminController
         $model->setStatus(id: $id, status: 'confirmed', sequence: (int) $reservation['ics_sequence']);
         $this->logChange(action: 'Confirmed', id: $id, name: $reservation['customer_name']);
         (new ReservationNotifier($this->osmium))->confirmed($model->get($id));
+
+        return ['success' => true, 'id' => $id];
+    }
+
+    /** The party has arrived: the table is theirs, so the booking can no longer be moved or cancelled. Nobody is emailed. */
+    private function seat(int $id): array
+    {
+        $model = new Reservation($this->osmium->dataSource);
+        $reservation = $this->findOpen(model: $model, id: $id, allowed: ['confirmed'], verb: 'marked as arrived');
+
+        $model->setStatus(id: $id, status: 'seated', sequence: (int) $reservation['ics_sequence']);
+        $this->logChange(action: 'Arrived', id: $id, name: $reservation['customer_name']);
 
         return ['success' => true, 'id' => $id];
     }
@@ -212,6 +225,9 @@ class ReservationsController extends AdminController
 
         $timeChanged = $startsAt !== $reservation['starts_at'] || $partySize !== (int) $reservation['party_size'];
         $changed = $timeChanged || $chosenId !== $currentTableId;
+
+        $movedWhileSeated = $reservation['status'] === 'seated' && $changed;
+        if ($movedWhileSeated) throw new \InvalidArgumentException('This party has arrived, so the time, people and table cannot be changed');
         if ($changed) ReservationRules::staffSlot(config: $config, start: $start);
 
         $isConfirmed = $reservation['status'] === 'confirmed';
@@ -491,6 +507,7 @@ class ReservationsController extends AdminController
         $colour = match ($status) {
             'requested' => 'warning',
             'confirmed' => 'success',
+            'seated' => 'info',
             default => 'secondary',
         };
 

@@ -43,6 +43,12 @@ return [
                 'confirm' => 'Decline this request? The customer will be emailed.',
                 'visible' => fn(array $row, array $context): bool => $row['status'] === 'requested',
             ],
+            [
+                'label' => 'Arrived',
+                'icon' => 'bx-log-in',
+                'action' => 'seat',
+                'visible' => fn(array $row, array $context): bool => $row['status'] === 'confirmed',
+            ],
             ['label' => 'Edit', 'icon' => 'bx-edit-alt', 'event' => 'edit'],
             [
                 'label' => 'Cancel reservation',

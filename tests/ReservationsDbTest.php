@@ -127,6 +127,20 @@ class ReservationsDbTest extends DatabaseTestCase
         $this->assertSame($first, (int) $clash['id']);
     }
 
+    public function test_a_party_that_has_arrived_still_holds_its_table(): void
+    {
+        $reservations = new Reservation($this->db);
+        $table = $this->table('zzSeated', 4);
+        $id = $this->confirmed($reservations, 4, $table, '2026-11-05 19:00:00', '2026-11-05 20:30:00');
+
+        $reservations->setStatus(id: $id, status: 'seated', sequence: 0);
+
+        $this->assertSame('seated', $reservations->get($id)['status']);
+        $this->assertNull($reservations->findFreeTable(2, '2026-11-05 19:30:00', '2026-11-05 21:00:00'));
+        $this->assertSame($id, (int) $reservations->findOverlap(excludeId: 0, tableId: $table, startsAt: '2026-11-05 19:30:00', endsAt: '2026-11-05 21:00:00')['id']);
+        $this->assertTrue($reservations->isDuplicate('pat@example.com', '2026-11-05 19:00:00'));
+    }
+
     public function test_the_turnaround_holds_a_table_after_a_booking_and_before_the_next(): void
     {
         $reservations = new Reservation($this->db);

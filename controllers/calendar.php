@@ -13,7 +13,7 @@ use Osmium\Services\OsmiumReservations\Models\ReservationMail;
 $reference = \preg_replace('/[^A-Za-z0-9]/', '', (string) ($_GET['ref'] ?? ''));
 $reservation = $reference !== '' ? (new Reservation($this->osmium->dataSource))->getByReference($reference) : null;
 
-$isEvent = $reservation !== null && \in_array($reservation['status'], ['confirmed', 'cancelled'], true);
+$isEvent = $reservation !== null && \in_array($reservation['status'], ['confirmed', 'seated', 'cancelled'], true);
 if (!$isEvent) {
     \http_response_code(404);
     echo 'Not found';

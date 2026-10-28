@@ -32,6 +32,7 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
         <div class="d-flex flex-wrap gap-3 mb-3 small text-muted">
             <span><span class="sched-key sched-requested"></span> Waiting for you</span>
             <span><span class="sched-key sched-confirmed"></span> Confirmed</span>
+            <span><span class="sched-key sched-seated"></span> Arrived</span>
             <span><span class="sched-key sched-break"></span> Not taking bookings</span>
             <span><span class="sched-key sched-closed"></span> Closed</span>
             <span><span class="sched-key sched-turn"></span> Turnaround</span>
@@ -56,6 +57,7 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
     .sched-appt small { display: block; opacity: .9; }
     .sched-requested { background: #b8860b; border-color: #e0a800; }
     .sched-confirmed { background: #1f8f4e; border-color: #28a745; }
+    .sched-seated { background: #1b6ea8; border-color: #2a8fd0; cursor: default !important; }
     .sched-key { display: inline-block; width: .9rem; height: .9rem; border-radius: .2rem; vertical-align: -.15rem; margin-right: .25rem; }
     .sched-key.sched-closed, .sched-key.sched-break, .sched-key.sched-turn { border: 1px solid var(--bs-border-color, #ccc); }
     .sched-dragging { z-index: 10; opacity: .85; cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
@@ -130,7 +132,7 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
                         <label class="form-label" for="reservationDeclineMessage">Message to the customer (optional, goes in the email)</label>
                         <textarea class="form-control" id="reservationDeclineMessage" rows="3" maxlength="1000" placeholder="For example: We could seat you at 8:30pm if that suits you."></textarea>
                     </div>
-                    <div class="form-text">Confirming, declining or cancelling emails the customer. Changing the time of a confirmed reservation emails them the new time. Confirming picks a table for you unless you choose one.</div>
+                    <div class="form-text">Confirming, declining or cancelling emails the customer; Arrived does not. Once a party has arrived the booking can no longer be moved or cancelled. Changing the time of a confirmed reservation emails them the new time. Confirming picks a table for you unless you choose one.</div>
                     <div id="reservationResult" class="alert d-none mt-3"></div>
                 </div>
                 <div class="modal-footer justify-content-between">
@@ -140,6 +142,7 @@ $e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
                     </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary" id="reservationSaveButton">Save changes</button>
+                        <button type="button" class="btn btn-info d-none" id="reservationSeatButton" data-decision="seat">Arrived</button>
                         <button type="button" class="btn btn-success d-none" id="reservationConfirmButton" data-decision="confirm">Confirm</button>
                     </div>
                 </div>
