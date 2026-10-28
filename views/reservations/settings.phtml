@@ -1,0 +1,138 @@
+<?php
+
+use Osmium\Modules\Admin\Core\ListView;
+
+$adminBasePathPhp = '/' . ($osmium->config->site->adminPath ?? 'admin') . '/';
+
+$listContext = [
+    'adminUrl' => $adminUrl,
+    'isAdmin' => $admin['isAdmin'],
+    'editors' => [],
+    'avatarUrl' => $admin['avatarUrl'] ?? '',
+];
+$settings = $admin['settings'];
+$e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
+?>
+<div class="d-flex justify-content-between align-items-center py-3 mb-4">
+    <h4 class="mb-0">
+        <img src="/assets/services/osmium-reservations/logo.png" alt="" width="28" height="28" class="me-2 align-text-bottom">Osmium Reservations
+    </h4>
+</div>
+
+<?= ListView::render($admin['lists']['tables'], $admin['tables'], $listContext) ?>
+
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Booking rules</h5></div>
+    <div class="card-body">
+        <form id="settingsForm">
+            <p class="text-muted mb-2">Opening hours come from <a href="<?= $e($adminBasePathPhp) ?>settings/location">Company &gt; Location</a>. Bookings can start from opening time up to closing time.</p>
+            <div class="row g-2 mb-3">
+                <?php foreach ($admin['days'] as $day => $dayName): ?>
+                    <?php $open = $admin['companyHours'][$day]; $window = $settings['windows'][$day]; $break = $settings['breaks'][$day]; ?>
+                    <div class="col-12 d-flex align-items-center gap-3">
+                        <div style="width: 7rem;"><?= $e($dayName) ?></div>
+                        <div style="width: 9rem;"><?= $open === null ? '<span class="text-muted">Closed</span>' : $e($open['open'] . ' to ' . $open['close']) ?></div>
+                        <span class="text-muted">Bookings</span>
+                        <input type="time" class="form-control form-control-sm" style="width: 8rem;" id="wfrom_<?= $day ?>" value="<?= $e($window['start'] ?? '') ?>" <?= $open === null ? 'disabled' : '' ?>>
+                        <span>to</span>
+                        <input type="time" class="form-control form-control-sm" style="width: 8rem;" id="wto_<?= $day ?>" value="<?= $e($window['end'] ?? '') ?>" <?= $open === null ? 'disabled' : '' ?>>
+                        <span class="text-muted ms-3">Break</span>
+                        <input type="time" class="form-control form-control-sm" style="width: 8rem;" id="bfrom_<?= $day ?>" value="<?= $e($break['start'] ?? '') ?>" <?= $open === null ? 'disabled' : '' ?>>
+                        <span>to</span>
+                        <input type="time" class="form-control form-control-sm" style="width: 8rem;" id="bto_<?= $day ?>" value="<?= $e($break['end'] ?? '') ?>" <?= $open === null ? 'disabled' : '' ?>>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="form-text mb-3">Leave Bookings empty to take bookings from opening to closing, or set a narrower window (for example last bookings at 21:00). A break is optional: set it between lunch and dinner and nothing can start in it. Guests may still be at their table after the last booking time.</div>
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsNotice">Minimum notice (hours)</label>
+                    <input type="number" class="form-control" id="settingsNotice" min="0" max="720" value="<?= (int) $settings['minNoticeHours'] ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsAhead">How far ahead (days)</label>
+                    <input type="number" class="form-control" id="settingsAhead" min="1" max="730" value="<?= (int) $settings['maxDaysAhead'] ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsStep">Times on the</label>
+                    <select class="form-select" id="settingsStep">
+                        <?php foreach ($admin['steps'] as $step): ?>
+                            <option value="<?= (int) $step ?>" <?= $step === (int) $settings['stepMinutes'] ? 'selected' : '' ?>><?= (int) $step ?> minute marks</option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsDining">Dining time (minutes)</label>
+                    <input type="number" class="form-control" id="settingsDining" min="15" max="480" value="<?= (int) $settings['diningMinutes'] ?>">
+                    <div class="form-text">How long a table is held for each booking. Customers never see it.</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsMinParty">Smallest party</label>
+                    <input type="number" class="form-control" id="settingsMinParty" min="1" max="100" value="<?= (int) $settings['minParty'] ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="settingsMaxParty">Largest party online</label>
+                    <input type="number" class="form-control" id="settingsMaxParty" min="1" max="100" value="<?= (int) $settings['maxParty'] ?>">
+                    <div class="form-text">Bigger parties are asked to phone.</div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="settingsEmails">Email these addresses when a request comes in (one per line)</label>
+                    <textarea class="form-control" id="settingsEmails" rows="2"><?= $e($settings['notifyEmailsText']) ?></textarea>
+                </div>
+                <div class="col-12 d-flex align-items-center gap-3">
+                    <button type="submit" class="btn btn-outline-primary" id="settingsSaveButton">Save settings</button>
+                    <div id="settingsResult" class="alert d-none mb-0 py-2"></div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="tableModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="tableForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tableModalTitle">Add a table</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="tableId">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="tableName">Name</label>
+                            <input type="text" class="form-control" id="tableName" maxlength="100" placeholder="e.g. Window 1" required>
+                        </div>
+                        <div class="col-3 mb-3">
+                            <label class="form-label" for="tableSeats">Seats</label>
+                            <input type="number" class="form-control" id="tableSeats" min="1" max="100" value="2" required>
+                        </div>
+                        <div class="col-3 mb-3">
+                            <label class="form-label" for="tableOrder">Order</label>
+                            <input type="number" class="form-control" id="tableOrder" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="tableEnabled" checked>
+                        <label class="form-check-label" for="tableEnabled">In use (can be given to bookings)</label>
+                    </div>
+                    <div id="tableResult" class="alert d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="<?= $cspNonce ?? '' ?>">
+    window.OsmiumReservationsConfig = {
+        basePath: adminBasePath,
+        tables: <?= \json_encode(\array_column($admin['tables'], null, 'id'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+    };
+</script>
+<script src="/assets/admin/js/list-view.js<?= $adminAssetVersion('/assets/admin/js/list-view.js') ?>"></script>
+<script src="/assets/services/osmium-reservations/reservations.js<?= $adminAssetVersion('/assets/services/osmium-reservations/reservations.js') ?>"></script>

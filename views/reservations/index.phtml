@@ -1,0 +1,156 @@
+<?php
+
+use Osmium\Modules\Admin\Core\ListView;
+
+$adminBasePathPhp = '/' . ($osmium->config->site->adminPath ?? 'admin') . '/';
+
+$listContext = [
+    'adminUrl' => $adminUrl,
+    'isAdmin' => $admin['isAdmin'],
+    'editors' => [],
+    'avatarUrl' => $admin['avatarUrl'] ?? '',
+];
+$settings = $admin['settings'];
+$e = static fn(mixed $value): string => \htmlspecialchars((string) $value);
+?>
+<div class="d-flex justify-content-between align-items-center py-3 mb-4">
+    <h4 class="mb-0"><i class="bx bx-restaurant me-2 align-text-bottom"></i>Reservations</h4>
+</div>
+
+<div class="card mb-4" id="schedule">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0" id="scheduleTitle">Schedule</h5>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-primary" id="scheduleNew"><i class="bx bx-plus me-1"></i>New reservation</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="scheduleToday">Today</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="schedulePrev" aria-label="Previous day"><i class="bx bx-chevron-left"></i></button>
+            <input type="date" class="form-control form-control-sm" id="scheduleDate" style="width: 10rem;">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="scheduleNext" aria-label="Next day"><i class="bx bx-chevron-right"></i></button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-3 mb-3 small text-muted">
+            <span><span class="sched-key sched-requested"></span> Waiting for you</span>
+            <span><span class="sched-key sched-confirmed"></span> Confirmed</span>
+            <span><span class="sched-key sched-break"></span> Not taking bookings</span>
+            <span><span class="sched-key sched-closed"></span> Closed</span>
+        </div>
+        <div id="scheduleGrid" class="sched-scroll"></div>
+    </div>
+</div>
+<style nonce="<?= $cspNonce ?? '' ?>">
+    .sched-scroll { overflow-x: auto; }
+    .sched { display: grid; position: relative; min-width: 36rem; }
+    .sched-head { font-weight: 600; text-align: center; padding: .4rem .25rem; border-bottom: 1px solid var(--bs-border-color, #ccc); }
+    .sched-times { position: relative; }
+    .sched-time { position: absolute; right: .5rem; font-size: .75rem; color: var(--bs-secondary-color, #888); transform: translateY(-50%); }
+    .sched-col { position: relative; border-left: 1px solid var(--bs-border-color, #ccc); }
+    .sched-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--bs-border-color, #ddd); opacity: .5; }
+    .sched-shade { position: absolute; left: 0; right: 0; }
+    .sched-closed { background: repeating-linear-gradient(135deg, rgba(128,128,128,.28), rgba(128,128,128,.28) 4px, rgba(128,128,128,.12) 4px, rgba(128,128,128,.12) 8px); }
+    .sched-break { background: rgba(13, 110, 253, .22); }
+    .sched-appt { position: absolute; left: 3px; right: 3px; border-radius: .35rem; padding: .15rem .35rem; font-size: .78rem; line-height: 1.2; overflow: hidden; cursor: pointer; border: 1px solid transparent; text-align: left; z-index: 2; color: #fff; }
+    .sched-appt small { display: block; opacity: .9; }
+    .sched-requested { background: #b8860b; border-color: #e0a800; }
+    .sched-confirmed { background: #1f8f4e; border-color: #28a745; }
+    .sched-key { display: inline-block; width: .9rem; height: .9rem; border-radius: .2rem; vertical-align: -.15rem; margin-right: .25rem; }
+    .sched-key.sched-closed, .sched-key.sched-break { border: 1px solid var(--bs-border-color, #ccc); }
+    .sched-note { padding: 1rem; color: var(--bs-secondary-color, #888); }
+</style>
+
+<?= ListView::render($admin['lists']['active'], $admin['reservations'], $listContext) ?>
+<?= ListView::render($admin['lists']['deleted'], $admin['deletedReservations'], $listContext) ?>
+
+<div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="reservationForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reservationModalTitle">Edit reservation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="reservationId">
+                    <div id="reservationNewFields" class="d-none">
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label" for="reservationName">Customer name</label>
+                                <input type="text" class="form-control" id="reservationName" maxlength="100">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label" for="reservationPhone">Phone</label>
+                                <input type="tel" class="form-control" id="reservationPhone" maxlength="30">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label" for="reservationEmail">Email (to send confirmation)</label>
+                                <input type="email" class="form-control" id="reservationEmail" maxlength="150">
+                            </div>
+                        </div>
+                    </div>
+                    <p class="mb-1 fw-semibold" id="reservationCustomer"></p>
+                    <p class="mb-3 small text-muted" id="reservationWho"></p>
+                    <p class="mb-3 text-muted" id="reservationTheirNotes"></p>
+                    <div class="row">
+                        <div class="col-4 mb-3">
+                            <label class="form-label" for="reservationParty">People</label>
+                            <input type="number" class="form-control" id="reservationParty" min="1" max="100" value="2" required>
+                        </div>
+                        <div class="col-8 mb-3">
+                            <label class="form-label" for="reservationTable">Table</label>
+                            <select class="form-select" id="reservationTable">
+                                <option value="0">Automatic (smallest free table that fits)</option>
+                                <?php foreach ($admin['tables'] as $table): ?>
+                                    <?php if ($table['enabled']): ?>
+                                        <option value="<?= (int) $table['id'] ?>"><?= $e($table['name']) ?> (seats <?= (int) $table['seats'] ?>)</option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="reservationDate">Date</label>
+                            <input type="date" class="form-control" id="reservationDate" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="reservationTime">Time</label>
+                            <input type="time" class="form-control" id="reservationTime" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="reservationNotes" id="reservationNotesLabel">Your notes (never shown to the customer)</label>
+                        <textarea class="form-control" id="reservationNotes" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3 d-none" id="reservationDeclineBox">
+                        <label class="form-label" for="reservationDeclineMessage">Message to the customer (optional, goes in the email)</label>
+                        <textarea class="form-control" id="reservationDeclineMessage" rows="3" maxlength="1000" placeholder="For example: We could seat you at 8:30pm if that suits you."></textarea>
+                    </div>
+                    <div class="form-text">Confirming, declining or cancelling emails the customer. Changing the time of a confirmed reservation emails them the new time. Confirming picks a table for you unless you choose one.</div>
+                    <div id="reservationResult" class="alert d-none mt-3"></div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <div>
+                        <button type="button" class="btn btn-link text-danger px-0 d-none" id="reservationDeclineButton" data-decision="decline">Decline request</button>
+                        <button type="button" class="btn btn-link text-danger px-0 d-none" id="reservationCancelButton" data-decision="cancel">Cancel reservation</button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" id="reservationSaveButton">Save changes</button>
+                        <button type="button" class="btn btn-success d-none" id="reservationConfirmButton" data-decision="confirm">Confirm</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="<?= $cspNonce ?? '' ?>">
+    window.OsmiumReservationsConfig = {
+        basePath: adminBasePath,
+        reservations: <?= \json_encode(\array_column($admin['reservations'], null, 'id'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        tables: <?= \json_encode(\array_column($admin['tables'], null, 'id'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        schedule: {
+            hours: <?= \json_encode($settings['hours'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+            step: <?= (int) $settings['stepMinutes'] ?>
+        }
+    };
+</script>
+<script src="/assets/admin/js/list-view.js<?= $adminAssetVersion('/assets/admin/js/list-view.js') ?>"></script>
+<script src="/assets/services/osmium-reservations/reservations.js<?= $adminAssetVersion('/assets/services/osmium-reservations/reservations.js') ?>"></script>

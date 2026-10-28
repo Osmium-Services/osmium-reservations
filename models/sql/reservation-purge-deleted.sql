@@ -1,0 +1,1 @@
+DELETE FROM {TABLE} WHERE deleted_at IS NOT NULL
