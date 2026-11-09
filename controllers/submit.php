@@ -1,5 +1,6 @@
 <?php
 
+use Osmium\Core\Features\IpRateLimiter;
 use Osmium\Core\Library\ServiceHooks;
 use Osmium\Core\Library\ServiceLoader;
 use Osmium\Core\Models\ServiceModel;
@@ -45,7 +46,11 @@ $protectionAnswers = (new ServiceHooks(new ServiceLoader(new ServiceModel($this-
     ->collect('form.verify', ['form' => 'reservation', 'post' => $_POST, 'dataSource' => $this->osmium->dataSource]);
 $protectionFailed = \in_array(false, $protectionAnswers, true);
 
-$looksLikeABot = $botDetected || !$tokenIsValid || $submittedTooFast || $protectionFailed;
+// Each accepted attempt counts: 5 per 10 minutes per visitor, on top of core's general API limit
+$rateLimited = fn(): bool => (new IpRateLimiter(namespace: 'reservations-submit', maxAttempts: 5, windowSeconds: 600))
+    ->tooManyRequests($this->osmium->ipAddress->getVisitorIP($this->osmium->config->site->trustProxyHeaders ?? false));
+
+$looksLikeABot = $botDetected || !$tokenIsValid || $submittedTooFast || $protectionFailed || $rateLimited();
 if ($looksLikeABot) {
     $notice('failed', ReservationRequest::TECHNICAL_PROBLEM); // Never say which check failed
     $this->osmium->header->redirect(targetURL: $back, statusCode: 302);
