@@ -87,6 +87,9 @@ class ReservationsController extends AdminController
         $missingParams = !$action || ($needsId && !$id);
         if ($missingParams) $this->admin->jsonError('Missing parameters');
 
+        $adminOnly = \in_array($action, ['save_settings', 'save_table', 'delete_table'], true);
+        if ($adminOnly && !$this->isAdmin()) $this->admin->jsonError('Unauthorized');
+
         try {
             $result = match ($action) {
                 'confirm' => $this->desk()->confirm(id: $id, tableId: (int) ($input['table_id'] ?? 0)),
