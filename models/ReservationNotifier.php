@@ -42,7 +42,7 @@ class ReservationNotifier
      */
     public function options(array $reservation, array $times): void
     {
-        $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
+        $phone = \trim((string) ($this->osmium->company()['phone'] ?? ''));
         $this->send(to: $reservation['customer_email'], mail: ReservationMail::options($reservation, $this->siteName(), $times, $phone));
     }
 
@@ -76,14 +76,14 @@ class ReservationNotifier
 
     public function declined(array $reservation, string $message = ''): void
     {
-        $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
+        $phone = \trim((string) ($this->osmium->company()['phone'] ?? ''));
         $this->send(to: $reservation['customer_email'], mail: ReservationMail::declined(reservation: $reservation, siteName: $this->siteName(), message: $message, phone: $phone));
         $this->announce(event: 'reservation.declined', reservation: $reservation);
     }
 
     public function cancelled(array $reservation, string $message = ''): void
     {
-        $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
+        $phone = \trim((string) ($this->osmium->company()['phone'] ?? ''));
         $this->send(to: $reservation['customer_email'], mail: ReservationMail::cancelled(reservation: $reservation, siteName: $this->siteName(), message: $message, phone: $phone));
         $this->announce(event: 'reservation.cancelled', reservation: $reservation);
     }

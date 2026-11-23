@@ -63,7 +63,7 @@ class ReservationsController extends AdminController
 
     private function loadRules(): void
     {
-        $companyHours = $this->osmium->config->company->openingHours ?? null;
+        $companyHours = $this->osmium->company()['openingHours'] ?? null;
         $this->data['admin']['settings'] = ReservationConfig::get(companyHours: $companyHours);
         $this->data['admin']['companyHours'] = ReservationConfig::hoursFor(companyHours: $companyHours, breaks: []);
         $this->data['admin']['settings']['notifyEmailsText'] = \implode("\n", $this->data['admin']['settings']['notifyEmails']);

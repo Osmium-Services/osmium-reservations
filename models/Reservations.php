@@ -11,7 +11,7 @@ use Osmium\Core\Library\OsmiumPDO;
  * name, email, phone, notes, token and the zip honeypot) and is sent back to the page it came from.
  *
  *     $reservations = new \Osmium\Services\OsmiumReservations\Models\Reservations($this->osmium->dataSource);
- *     $rules = $reservations->rules($this->osmium->config->company->openingHours ?? null);         // hours by weekday (with optional breakStart/breakEnd), minNoticeHours, maxDaysAhead, stepMinutes, minParty, maxParty
+ *     $rules = $reservations->rules($this->osmium->company()['openingHours'] ?? null);         // hours by weekday (with optional breakStart/breakEnd), minNoticeHours, maxDaysAhead, stepMinutes, minParty, maxParty
  *     $notice = $reservations->pullNotice();   // status (sent or failed) and message, shown once
  */
 class Reservations
@@ -23,7 +23,7 @@ class Reservations
     }
 
     /**
-     * @param mixed $companyHours pass $this->osmium->config->company->openingHours so the hours are the ones in Company > Location
+     * @param mixed $companyHours pass $this->osmium->company()['openingHours'] so the hours are the ones in Company > Location
      * @return array{hours: array<int, array{open: string, close: string}|null>, minNoticeHours: int, maxDaysAhead: int, stepMinutes: int, minParty: int, maxParty: int}
      */
     public function rules(mixed $companyHours = null): array

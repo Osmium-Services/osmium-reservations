@@ -34,8 +34,8 @@ class ReservationDesk
      */
     public function acceptRequest(array $request, \DateTimeImmutable $now): string
     {
-        $config = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null);
-        $phone = \trim((string) ($this->osmium->config->company->phone ?? ''));
+        $config = ReservationConfig::get(companyHours: $this->osmium->company()['openingHours'] ?? null);
+        $phone = \trim((string) ($this->osmium->company()['phone'] ?? ''));
         ReservationRules::party(config: $config, partySize: $request['partySize'], largestTable: (new ReservationTable($this->osmium->dataSource))->largestParty(), phone: $phone);
         $slot = ReservationRules::slot(config: $config, date: $request['date'], time: $request['time'], now: $now);
 
@@ -147,7 +147,7 @@ class ReservationDesk
 
         $partySize = $this->validPartySize($input);
         $start = $this->validStart($input);
-        $config = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null);
+        $config = ReservationConfig::get(companyHours: $this->osmium->company()['openingHours'] ?? null);
         $slot = ReservationRules::staffSlot(config: $config, start: $start);
 
         $model = new Reservation($db);
@@ -175,7 +175,7 @@ class ReservationDesk
 
         $partySize = $this->validPartySize($input);
         $start = $this->validStart($input);
-        $config = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null);
+        $config = ReservationConfig::get(companyHours: $this->osmium->company()['openingHours'] ?? null);
 
         $startsAt = $start->format('Y-m-d H:i:s');
         $endsAt = $start->modify('+' . $config['diningMinutes'] . ' minutes')->format('Y-m-d H:i:s');
@@ -255,7 +255,7 @@ class ReservationDesk
     private function tableFor(Reservation $model, ?array $reservation, int $tableId, int $partySize, string $startsAt, string $endsAt, bool $keepIfFree = false): array
     {
         $excludeId = $reservation !== null ? (int) $reservation['id'] : 0;
-        $turnaround = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null)['turnaroundMinutes'];
+        $turnaround = ReservationConfig::get(companyHours: $this->osmium->company()['openingHours'] ?? null)['turnaroundMinutes'];
 
         if ($keepIfFree) {
             try {
@@ -294,7 +294,7 @@ class ReservationDesk
     private function noTable(Reservation $model, string $startsAt, int $partySize, int $excludeId): NoTableException
     {
         $start = new \DateTimeImmutable($startsAt);
-        $config = ReservationConfig::get(companyHours: $this->osmium->config->company->openingHours ?? null);
+        $config = ReservationConfig::get(companyHours: $this->osmium->company()['openingHours'] ?? null);
         $alternatives = new ReservationAlternatives(reservations: $model, config: $config, now: $start->setTime(0, 0));
         $times = $alternatives->nearestTimes(date: $start->format('Y-m-d'), requested: $start->format('H:i'), partySize: $partySize, excludeId: $excludeId);
 
