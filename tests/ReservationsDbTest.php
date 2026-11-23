@@ -22,6 +22,15 @@ require_once __DIR__ . '/../models/ReservationAlternatives.php';
  */
 class ReservationsDbTest extends DatabaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $prefix = $this->db->tablePrefix(); // Dev data left from real use would break the tests that expect no tables; this is rolled back with the test
+        $this->db->prepare(sql: "DELETE FROM {$prefix}reservations")->execute();
+        $this->db->prepare(sql: "DELETE FROM {$prefix}reservation_tables")->execute();
+    }
+
     private function table(string $name, int $seats, bool $enabled = true): int
     {
         return (new ReservationTable($this->db))->create(name: $name, seats: $seats, enabled: $enabled, sortOrder: 0);
