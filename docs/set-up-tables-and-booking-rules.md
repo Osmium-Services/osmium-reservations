@@ -1,6 +1,7 @@
 ---
 title: Set up tables and booking rules
 tags: reservations, settings, tables, seats, dining time, turnaround, opening hours, break, notice
+page: admin/settings/reservations
 ---
 
 Open **Settings** on the Reservations page.

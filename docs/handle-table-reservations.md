@@ -1,6 +1,7 @@
 ---
 title: Confirm and manage table reservations
 tags: reservations, tables, restaurant, booking, confirm, decline, arrived, live, schedule
+page: admin/reservations
 ---
 
 **Reservations** shows the table requests customers make. Each one waits for you to confirm or decline it.
