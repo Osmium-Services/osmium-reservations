@@ -4,6 +4,7 @@ use Osmium\Core\Features\IpRateLimiter;
 use Osmium\Core\Library\ServiceHooks;
 use Osmium\Core\Library\ServiceLoader;
 use Osmium\Core\Models\ServiceModel;
+use Osmium\Services\OsmiumReservations\Models\ReservationDesk;
 use Osmium\Services\OsmiumReservations\Models\ReservationRequest;
 use Osmium\Services\OsmiumReservations\Models\Reservations;
 
